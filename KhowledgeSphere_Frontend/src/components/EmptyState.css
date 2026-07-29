@@ -1,0 +1,162 @@
+/* KnowledgeSphere - Empty State & Error State CSS */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-xxl, 40px) var(--space-lg, 24px);
+  background-color: var(--bg-card, #ffffff);
+  border: 1px dashed var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  max-width: 580px;
+  width: 100%;
+  margin: var(--space-xl, 32px) auto;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+  animation: emptyStateFadeIn 0.35s ease-out forwards;
+}
+
+.empty-state.variant-error {
+  border: 1px solid #fecdd3;
+  background-color: #fff1f2;
+}
+
+[data-theme="dark"] .empty-state.variant-error {
+  border-color: #881337;
+  background-color: #1f1216;
+}
+
+.empty-state-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border-radius: var(--radius-full, 9999px);
+  background-color: var(--color-primary-light, #fef2f2);
+  color: var(--color-primary, #dc2626);
+  margin-bottom: var(--space-md, 16px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.08);
+  animation: floatIcon 4s ease-in-out infinite;
+}
+
+.empty-state.variant-error .empty-state-icon-wrapper {
+  background-color: #ffe4e6;
+  color: #e11d48;
+}
+
+[data-theme="dark"] .empty-state.variant-error .empty-state-icon-wrapper {
+  background-color: #4c0519;
+  color: #fda4af;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-main, #0f172a);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.empty-state-desc {
+  font-size: 0.925rem;
+  color: var(--color-text-muted, #64748b);
+  max-width: 420px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-empty-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-empty-primary {
+  background-color: var(--color-primary, #dc2626);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.btn-empty-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover, #b91c1c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+}
+
+.btn-empty-secondary {
+  background-color: var(--bg-primary, #f8fafc);
+  color: var(--color-text-main, #0f172a);
+  border: 1px solid var(--color-border, #cbd5e1);
+}
+
+.btn-empty-secondary:hover:not(:disabled) {
+  background-color: var(--color-border, #e2e8f0);
+}
+
+.btn-empty-action:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes emptyStateFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floatIcon {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@media (max-width: 640px) {
+  .empty-state {
+    padding: 28px 16px;
+    margin: 20px auto;
+  }
+  .empty-state-title {
+    font-size: 1.1rem;
+  }
+  .empty-state-desc {
+    font-size: 0.875rem;
+  }
+}

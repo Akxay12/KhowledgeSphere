@@ -1,0 +1,154 @@
+/* KnowledgeSphere Onboarding Transition Overlay Styling */
+
+.onboarding-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background-color: #080c14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+  backdrop-filter: blur(24px);
+}
+
+/* Skip Button */
+.overlay-skip-btn {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 100000;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f1f5f9;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.overlay-skip-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Central Stage */
+.onboarding-overlay-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Logo Circle Assembly */
+.logo-circle-wrapper {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+/* Inner Circular Frame for Logo */
+.inner-logo-circle {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.18) 0%, rgba(122, 31, 31, 0.5) 100%), rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 35px rgba(122, 31, 31, 0.55), 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  z-index: 2;
+  backdrop-filter: blur(16px);
+  box-sizing: border-box;
+}
+
+.overlay-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(122, 31, 31, 0.6));
+}
+
+/* Outer Orbiting Ring around Circle */
+.glowing-orbit-ring {
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-ring-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px dashed rgba(248, 113, 113, 0.85);
+  box-shadow: 0 0 30px rgba(122, 31, 31, 0.7);
+}
+
+.orbit-ring-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 15px rgba(248, 113, 113, 0.4);
+}
+
+/* Brand Text Box */
+.overlay-brand-text-box {
+  margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.overlay-brand-name {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  margin: 0;
+  text-shadow: 0 2px 20px rgba(122, 31, 31, 0.7);
+  background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.overlay-brand-message {
+  font-size: 1.1rem;
+  color: #f1f5f9;
+  font-weight: 600;
+  margin: 2px 0 0 0;
+}
+
+.overlay-brand-subtitle {
+  font-size: 0.88rem;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  margin: 0;
+  font-weight: 500;
+}
+

@@ -1,0 +1,11 @@
+.drafts-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.drafts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

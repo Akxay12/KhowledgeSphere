@@ -1,0 +1,741 @@
+/* ==========================================================================
+   KnowledgeSphere Profile Page CSS
+   Clean, modern, research-focused, portfolio-oriented styling.
+   Theme: White canvas, maroon accent (#6B0F1A / #7A1F1F), refined typography.
+   ========================================================================== */
+
+.profile-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl, 32px);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-bottom: 60px;
+}
+
+.maroon-icon {
+  color: var(--color-primary, #6B0F1A);
+}
+
+.maroon-text {
+  color: var(--color-primary, #6B0F1A);
+}
+
+/* --------------------------------------------------------------------------
+   1. HERO SECTION
+   -------------------------------------------------------------------------- */
+.profile-hero-card {
+  background-color: var(--bg-card, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-xl, 16px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+}
+
+.profile-banner-container {
+  height: 240px;
+  position: relative;
+  background-color: var(--color-primary-light, #fbf0f2);
+  overflow: hidden;
+}
+
+.profile-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-banner-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.35) 100%);
+}
+
+/* Pencil Edit Button on Top-Right Corner of Cover Photo Banner */
+.cover-edit-pencil-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background-color: rgba(15, 23, 42, 0.65);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.cover-edit-pencil-btn:hover {
+  background-color: var(--color-primary, #6B0F1A);
+  border-color: var(--color-primary, #6B0F1A);
+  transform: scale(1.08);
+}
+
+.profile-hero-content {
+  padding: 0 var(--space-xl, 28px) var(--space-xl, 28px) var(--space-xl, 28px);
+  position: relative;
+}
+
+.profile-avatar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: -80px;
+  margin-bottom: var(--space-lg, 20px);
+}
+
+.profile-avatar-box {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background-color: var(--bg-card, #ffffff);
+  border: 5px solid var(--bg-card, #ffffff);
+  box-shadow: var(--shadow-md, 0 6px 18px rgba(0,0,0,0.14));
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: var(--color-primary-light, #fbf0f2);
+  color: var(--color-primary, #6B0F1A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  font-weight: 700;
+}
+
+/* Small Circular Pencil Edit Icon on Bottom-Right Corner of Avatar */
+.avatar-edit-pencil-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background-color: var(--color-primary, #6B0F1A);
+  color: #ffffff;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--bg-card, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  z-index: 5;
+}
+
+.avatar-edit-pencil-btn:hover {
+  background-color: var(--color-primary-hover, #5a0c16);
+  transform: scale(1.08);
+}
+
+.profile-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 12px);
+}
+
+/* Primary Maroon Follow Button */
+.btn-follow-maroon {
+  background-color: var(--color-primary, #6B0F1A) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--color-primary, #6B0F1A) !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-lg, 10px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-follow-maroon:hover {
+  background-color: var(--color-primary-hover, #5a0c16) !important;
+  border-color: var(--color-primary-hover, #5a0c16) !important;
+  transform: translateY(-1px);
+}
+
+.btn-following-active {
+  background-color: var(--color-primary-light, #fbf0f2) !important;
+  color: var(--color-primary, #6B0F1A) !important;
+  border: 1px solid var(--color-primary, #6B0F1A) !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-lg, 10px);
+  cursor: pointer;
+}
+
+.icon-only-btn {
+  padding: 10px 12px;
+}
+
+.profile-identity-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+}
+
+.profile-full-name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-main, #0f172a);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.profile-username {
+  font-size: 0.95rem;
+  color: var(--color-text-muted, #64748b);
+  font-weight: 500;
+}
+
+.profile-pro-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-primary, #6B0F1A);
+  margin: 2px 0 8px 0;
+}
+
+.profile-bio-text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--color-text-muted, #475569);
+  max-width: 820px;
+  margin-bottom: var(--space-md, 16px);
+}
+
+/* Simplified Meta Row: Country, LinkedIn, Joined Date */
+.profile-meta-chips-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.profile-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-primary, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  padding: 6px 14px;
+  border-radius: var(--radius-full, 9999px);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: var(--color-text-main, #334155);
+}
+
+.profile-meta-chip.link-chip {
+  text-decoration: none;
+}
+
+.profile-meta-chip.link-chip:hover {
+  border-color: var(--color-primary, #6B0F1A);
+  color: var(--color-primary, #6B0F1A);
+  background-color: var(--color-primary-light, #fbf0f2);
+}
+
+/* --------------------------------------------------------------------------
+   2. SIMPLIFIED STATISTICS GRID (3 Cards: Publications, Followers, Likes)
+   -------------------------------------------------------------------------- */
+.profile-stats-grid-simple {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg, 20px);
+}
+
+.stat-card-clean {
+  background-color: var(--bg-card, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-xl, 16px);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.stat-card-clean:hover {
+  border-color: rgba(107, 15, 26, 0.25);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.08));
+  transform: translateY(-2px);
+}
+
+.stat-card-icon-maroon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background-color: var(--color-primary-light, #fbf0f2);
+  color: var(--color-primary, #6B0F1A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card-data {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-main, #0f172a);
+  line-height: 1.2;
+}
+
+.stat-card-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #64748b);
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   3. PROFILE TABS NAVIGATION (2 Tabs: Published & Liked)
+   -------------------------------------------------------------------------- */
+.profile-tabs-nav-container {
+  border-bottom: 2px solid var(--color-border, #e2e8f0);
+  margin-top: 8px;
+}
+
+.profile-tabs-scroll {
+  display: flex;
+  gap: var(--space-xl, 32px);
+}
+
+.profile-tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 4px;
+  border: none;
+  background: none;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+}
+
+.profile-tab-button:hover {
+  color: var(--color-primary, #6B0F1A);
+}
+
+.profile-tab-button.active {
+  color: var(--color-primary, #6B0F1A);
+  border-bottom-color: var(--color-primary, #6B0F1A);
+}
+
+.tab-count-badge {
+  background-color: var(--color-primary-light, #fbf0f2);
+  color: var(--color-primary, #6B0F1A);
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   4. TABS CONTENT PANELS
+   -------------------------------------------------------------------------- */
+.published-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-xl, 28px);
+}
+
+/* --------------------------------------------------------------------------
+   5. EDIT PROFILE MODAL
+   -------------------------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md, 16px);
+}
+
+.modal-card {
+  background-color: var(--bg-card, #ffffff);
+  border-radius: var(--radius-xl, 16px);
+  width: 100%;
+  max-width: 580px;
+  box-shadow: var(--shadow-2xl, 0 25px 50px -12px rgba(0,0,0,0.25));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-main, #0f172a);
+  margin: 0;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.btn-close:hover {
+  background-color: var(--bg-primary, #f1f5f9);
+  color: var(--color-text-main, #0f172a);
+}
+
+.modal-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md, 16px);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-main, #334155);
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border, #cbd5e1);
+  font-size: 0.92rem;
+  color: var(--color-text-main, #0f172a);
+  background-color: var(--bg-card, #ffffff);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--color-primary, #6B0F1A);
+  box-shadow: 0 0 0 3px rgba(107, 15, 26, 0.1);
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md, 16px);
+}
+
+@media (max-width: 520px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modal-actions-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+/* --------------------------------------------------------------------------
+   6. TABLET & MOBILE RESPONSIVE ENHANCEMENTS
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .profile-wrapper {
+    padding: 0 16px 60px 16px;
+    gap: 20px;
+  }
+
+  .profile-banner-container {
+    height: 190px;
+  }
+
+  .profile-avatar-box {
+    width: 130px;
+    height: 130px;
+  }
+
+  .profile-avatar-row {
+    margin-top: -65px;
+  }
+
+  .profile-full-name {
+    font-size: 1.55rem;
+  }
+
+  .profile-pro-title {
+    font-size: 0.98rem;
+  }
+
+  .profile-bio-text {
+    font-size: 0.9rem;
+  }
+
+  .stat-card-clean {
+    padding: 16px 18px;
+    gap: 12px;
+  }
+
+  .stat-card-value {
+    font-size: 1.3rem;
+  }
+
+  .published-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-wrapper {
+    padding: 0 12px 60px 12px;
+    gap: 16px;
+  }
+
+  .profile-banner-container {
+    height: 140px;
+  }
+
+  .cover-edit-pencil-btn {
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .profile-hero-content {
+    padding: 0 14px 18px 14px;
+  }
+
+  .profile-avatar-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: -50px;
+    margin-bottom: 12px;
+  }
+
+  .profile-avatar-box {
+    width: 96px;
+    height: 96px;
+    border-width: 3px;
+  }
+
+  .avatar-edit-pencil-btn {
+    width: 30px;
+    height: 30px;
+    bottom: 2px;
+    right: 2px;
+  }
+
+  .profile-action-buttons {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .profile-action-buttons .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    border-radius: var(--radius-md, 8px);
+  }
+
+  .profile-action-buttons .icon-only-btn {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .profile-name-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .profile-full-name {
+    font-size: 1.35rem;
+  }
+
+  .profile-username {
+    font-size: 0.88rem;
+  }
+
+  .profile-pro-title {
+    font-size: 0.92rem;
+    margin: 2px 0 6px 0;
+  }
+
+  .profile-bio-text {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .profile-meta-chips-row {
+    gap: 6px;
+  }
+
+  .profile-meta-chip {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+
+  /* Stat grid on mobile: 3 compact columns */
+  .profile-stats-grid-simple {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .stat-card-clean {
+    flex-direction: column;
+    text-align: center;
+    padding: 12px 6px;
+    gap: 6px;
+    border-radius: var(--radius-lg, 12px);
+  }
+
+  .stat-card-icon-maroon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .stat-card-value {
+    font-size: 1.15rem;
+  }
+
+  .stat-card-label {
+    font-size: 0.72rem;
+  }
+
+  /* Tabs scroll */
+  .profile-tabs-scroll {
+    gap: 16px;
+    justify-content: space-around;
+  }
+
+  .profile-tab-button {
+    font-size: 0.9rem;
+    padding: 10px 4px;
+  }
+
+  .published-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .toast-notification {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+}
+
+/* Toast Notifications */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: #0f172a;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.2));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 2000;
+  animation: toastSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toastSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

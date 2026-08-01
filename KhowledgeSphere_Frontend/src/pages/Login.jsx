@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { signInWithGoogle } from '../lib/googleAuth';
 import { useAuth } from '../context/AuthContext';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import AmbientParticles from '../components/AmbientParticles';
 import { useOnboardingTransition } from '../context/OnboardingTransitionContext';
 import './Login.css';

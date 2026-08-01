@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { useOnboardingTransition } from '../context/OnboardingTransitionContext';
 import './LandingPage.css';
 import brainImage from '../assets/images/brainimage.png';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 
 export default function LandingPage() {
   const navigate = useNavigate();

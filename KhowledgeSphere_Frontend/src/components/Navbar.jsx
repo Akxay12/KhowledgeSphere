@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Menu, UserPlus, LogIn } from 'lucide-react';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import { useAuth } from '../context/AuthContext';
 import './Navbar.css';
 

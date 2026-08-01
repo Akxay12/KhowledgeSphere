@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { signInWithGoogle } from '../lib/googleAuth';
 import { useAuth } from '../context/AuthContext';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import { getStoredUserProfile } from '../lib/authStorage';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import AmbientParticles from '../components/AmbientParticles';
 import { useOnboardingTransition } from '../context/OnboardingTransitionContext';
 import './Register.css';
@@ -181,18 +182,7 @@ export default function Register() {
       if (err.message === 'AUTHENTICATION_CANCELLED') {
         setAuthError('Google sign-in was cancelled.');
       } else {
-        // Fallback demo prefill if popup blocked
-        const demoProfile = {
-          fullName: 'Alexander Wright',
-          email: 'alex.wright@gmail.com',
-          picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
-          googleId: 'google-demo-id-987'
-        };
-        setFullName(demoProfile.fullName);
-        setEmail(demoProfile.email);
-        setIsGoogleAutofilled(true);
-        setGoogleProfileData(demoProfile);
-        if (!username) setUsername('alex_wright');
+        setAuthError('Google authentication was unavailable or blocked. Please enter your registration details manually.');
       }
     } finally {
       setGoogleSigningIn(false);

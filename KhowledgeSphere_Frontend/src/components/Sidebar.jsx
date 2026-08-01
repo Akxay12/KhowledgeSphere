@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Bookmark, User, Settings, PenTool, Menu, X, ArrowLeft, UserPlus, LogIn } from 'lucide-react';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import { isUserAuthenticated, getStoredUserProfile } from '../lib/authStorage';
 import './Sidebar.css';
 

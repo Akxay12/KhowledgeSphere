@@ -59,11 +59,8 @@ export function AuthProvider({ children }) {
       setIsAuthenticated(true);
       return { success: true, user: saved };
     } catch (error) {
-      // If API server is unreachable in preview mode, fallback to local auth session
-      const saved = saveUserProfile({ email, name: email.split('@')[0] });
-      setUser(saved);
-      setIsAuthenticated(true);
-      return { success: true, user: saved, warning: 'Connected in preview mode' };
+      // Propagation to component for proper UI error feedback
+      throw error;
     }
   };
 
@@ -79,10 +76,7 @@ export function AuthProvider({ children }) {
       setIsAuthenticated(true);
       return { success: true, user: saved };
     } catch (error) {
-      const saved = saveUserProfile(userData);
-      setUser(saved);
-      setIsAuthenticated(true);
-      return { success: true, user: saved, warning: 'Connected in preview mode' };
+      throw error;
     }
   };
 
@@ -98,10 +92,7 @@ export function AuthProvider({ children }) {
       setIsAuthenticated(true);
       return { success: true, user: saved };
     } catch (error) {
-      const saved = saveUserProfile(googleAuthData);
-      setUser(saved);
-      setIsAuthenticated(true);
-      return { success: true, user: saved };
+      throw error;
     }
   };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import logoImg from '../assets/images/KhowledgeSphere_log.png';
+import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import AmbientParticles from './AmbientParticles';
 import './OnboardingTransitionOverlay.css';
 

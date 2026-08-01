@@ -1,6 +1,0 @@
-{
-  "name": "KnowledgeSphere",
-  "description": "A premium, minimalist frontend template for a professional research publishing platform.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

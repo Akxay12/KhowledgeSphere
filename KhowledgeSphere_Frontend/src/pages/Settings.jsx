@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Eye, Palette, CheckCircle, LogOut, ShieldAlert, UserPlus, LogIn } from 'lucide-react';
+import { Lock, Eye, EyeOff, Palette, CheckCircle, LogOut, ShieldAlert, UserPlus, LogIn, UserX, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { settingsApi } from '../api/settings';
 import { SkeletonSettings } from '../components/SkeletonLoader';
@@ -9,12 +9,18 @@ import './Settings.css';
 export default function Settings() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('password');
+  const [activeTab, setActiveTab] = useState(() => isAuthenticated ? 'password' : 'theme');
   const [isLoading, setIsLoading] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [confirmDeleteChecked, setConfirmDeleteChecked] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setActiveTab('theme');
+    }
+  }, [isAuthenticated]);
 
 
   useEffect(() => {
@@ -75,95 +81,16 @@ export default function Settings() {
   };
 
 
-  const tabs = [
+  const allTabs = [
     { id: 'password', label: 'Password & Security', icon: Lock },
     { id: 'privacy', label: 'Privacy Control', icon: Eye },
     { id: 'theme', label: 'App Theme', icon: Palette },
     { id: 'account', label: 'Account & Log Out', icon: LogOut }
   ];
 
-  if (!isLoading && !isAuthenticated) {
-    return (
-      <div className="settings-container">
-        <div style={{
-          backgroundColor: 'var(--bg-card, #ffffff)',
-          border: '1px solid var(--color-border, #e2e8f0)',
-          borderRadius: '24px',
-          padding: '48px 32px',
-          textAlign: 'center',
-          maxWidth: '560px',
-          margin: '40px auto 0',
-          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.04)'
-        }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '20px',
-            backgroundColor: 'rgba(122, 31, 31, 0.08)',
-            color: '#7A1F1F',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 20px'
-          }}>
-            <Lock size={30} />
-          </div>
-
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
-            Account Settings Restricted
-          </h2>
-          <p style={{ fontSize: '0.95rem', color: '#64748b', lineHeight: '1.6', marginBottom: '28px' }}>
-            Account and security settings are only accessible when signed in to your KnowledgeSphere account. Create an account or log in to manage your preferences.
-          </p>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => navigate('/register')}
-              style={{
-                backgroundColor: '#7A1F1F',
-                color: '#ffffff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '12px',
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 14px rgba(122, 31, 31, 0.25)'
-              }}
-              id="settings-guest-signup-btn"
-            >
-              <UserPlus size={18} />
-              <span>Sign Up Now</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              style={{
-                backgroundColor: '#ffffff',
-                color: '#334155',
-                border: '1.5px solid #cbd5e1',
-                padding: '12px 22px',
-                borderRadius: '12px',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <LogIn size={18} />
-              <span>Log In</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const tabs = isAuthenticated 
+    ? allTabs 
+    : allTabs.filter(tab => tab.id === 'theme');
 
   return (
     <div className="settings-container">
@@ -174,8 +101,10 @@ export default function Settings() {
           {/* Header section */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2>Account Settings</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>Customize your publishing preferences and app security</p>
+          <h2>Settings</h2>
+          <p style={{ color: 'var(--color-text-muted)' }}>
+            {isAuthenticated ? 'Customize your publishing preferences and app security' : 'Customize application theme and appearance'}
+          </p>
         </div>
         {saveSuccess && (
           <div className="badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', gap: '6px' }}>
@@ -184,6 +113,44 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {!isAuthenticated && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          border: '1px solid var(--color-border, #e2e8f0)',
+          fontSize: '0.88rem',
+          color: 'var(--color-text-muted)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={16} style={{ color: 'var(--color-primary, #7A1F1F)' }} />
+            <span>Guest Mode: Only App Theme settings are accessible. Sign in to access account security and privacy controls.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            style={{
+              backgroundColor: 'var(--color-primary, #7A1F1F)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Log In
+          </button>
+        </div>
+      )}
 
       {/* Main settings grid */}
       <div className="settings-grid">
@@ -342,7 +309,24 @@ export default function Settings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <h3 className="settings-section-title">Session & Account Actions</h3>
               
-              <div className="account-action-card">
+              {!isAuthenticated && (
+                <div style={{
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                  border: '1px solid rgba(234, 179, 8, 0.3)',
+                  color: 'var(--color-text-main)',
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <AlertTriangle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
+                  <span>You are not signed in. Log in to access active session management and profile deletion options.</span>
+                </div>
+              )}
+
+              <div className="account-action-card" style={{ opacity: isAuthenticated ? 1 : 0.75 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                   <div className="account-action-icon red-icon">
                     <LogOut size={22} />
@@ -355,7 +339,17 @@ export default function Settings() {
                     <button 
                       type="button" 
                       className="btn-red-logout-lg"
-                      onClick={() => navigate('/')}
+                      disabled={!isAuthenticated}
+                      title={!isAuthenticated ? "Logout is disabled because you are not logged in" : ""}
+                      onClick={async () => {
+                        if (!isAuthenticated) return;
+                        await logout();
+                        navigate('/login');
+                      }}
+                      style={{
+                        opacity: isAuthenticated ? 1 : 0.4,
+                        cursor: isAuthenticated ? 'pointer' : 'not-allowed'
+                      }}
                     >
                       <LogOut size={18} />
                       <span>Log Out Now</span>
@@ -364,7 +358,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="account-action-card">
+              <div className="account-action-card" style={{ opacity: isAuthenticated ? 1 : 0.75 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                   <div className="account-action-icon danger-icon">
                     <UserX size={22} />
@@ -377,7 +371,16 @@ export default function Settings() {
                     <button 
                       type="button" 
                       className="btn-leave-ks-lg"
-                      onClick={() => setShowLeaveModal(true)}
+                      disabled={!isAuthenticated}
+                      title={!isAuthenticated ? "Leave account is disabled because you are not logged in" : ""}
+                      onClick={() => {
+                        if (!isAuthenticated) return;
+                        setShowLeaveModal(true);
+                      }}
+                      style={{
+                        opacity: isAuthenticated ? 1 : 0.4,
+                        cursor: isAuthenticated ? 'pointer' : 'not-allowed'
+                      }}
                     >
                       <AlertTriangle size={18} />
                       <span>Leave KnowledgeSphere</span>

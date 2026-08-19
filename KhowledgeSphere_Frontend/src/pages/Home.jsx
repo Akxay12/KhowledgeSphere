@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Sparkles, UserPlus, LogIn } from 'lucide-react';
 import { fetchPublications } from '../services/publicationService';
@@ -7,31 +7,60 @@ import { SkeletonCard } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { useAuth } from '../context/AuthContext';
+import { bookmarkApi } from '../api/bookmark';
+import { showToast } from '../lib/toast';
+import { getScrollPosition, clearScrollPosition, getPageCache, savePageCache, getPreviousPath } from '../lib/profileNavigation';
 import './Home.css';
 
 export default function Home() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState('for-you');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [papers, setPapers] = useState([]);
+
+  // Cache validation and restoration logic
+  const cached = getPageCache('home');
+  const prev = getPreviousPath();
+  const isReturningFromProfile = prev.startsWith('/profile') || prev.startsWith('/user');
+  const hasValidCache = cached && Array.isArray(cached.papers) && cached.papers.length > 0;
+  const shouldRestore = isReturningFromProfile && hasValidCache;
+
+  const [papers, setPapers] = useState(shouldRestore ? cached.papers : []);
+  const [isLoading, setIsLoading] = useState(shouldRestore ? cached.isLoading : true);
+  const [error, setError] = useState(shouldRestore ? cached.error : null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    // Only sync back to cache when we actually have papers loaded,
+    // and never overwrite a valid loaded feed with empty initial state.
+    if (papers && papers.length > 0) {
+      savePageCache('home', { papers, isLoading, error });
+    }
+  }, [papers, isLoading, error]);
 
   // Bookmarking persistence
-  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+  const [bookmarkedIds, setBookmarkedIds] = useState([]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      bookmarkApi.getBookmarks()
+        .then((res) => {
+          const apiIds = Array.isArray(res) 
+            ? res 
+            : (res && Array.isArray(res.data) ? res.data : []);
+          setBookmarkedIds(apiIds.map(id => typeof id === 'object' ? (id.publicationId || id.id) : id));
+        })
+        .catch((err) => {
+          console.error("Failed to load bookmarks in Home:", err);
+        });
+    } else {
+      setBookmarkedIds([]);
     }
-  });
+  }, [isAuthenticated]);
 
   const loadFeed = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchPublications({ tab: activeTab });
+      const res = await fetchPublications();
       if (res.success) {
         setPapers(res.data || []);
       } else {
@@ -42,48 +71,79 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab]);
+  }, []);
 
-  useEffect(() => {
-    loadFeed();
-  }, [loadFeed]);
-
-  // Handle bookmark toggle
-  const handleToggleBookmark = (id) => {
-    setBookmarkedIds(prev => {
-      const next = prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id];
-      localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(next));
-      return next;
-    });
+  const handleRefreshFeed = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    const apiPromise = fetchPublications();
+    const delayPromise = new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const [res] = await Promise.all([apiPromise, delayPromise]);
+      if (res.success) {
+        setPapers(res.data || []);
+      } else {
+        setError(res.error || 'Failed to load feed');
+      }
+    } catch (err) {
+      setError(err.message || 'Error loading publications');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const tabs = [
-    { id: 'for-you', label: 'For You' },
-    { id: 'following', label: 'Following' }
-  ];
+  useEffect(() => {
+    if (!shouldRestore) {
+      loadFeed();
+    }
+  }, [loadFeed, shouldRestore]);
+
+  // Scroll Restoration
+  useLayoutEffect(() => {
+    if (!isLoading) {
+      const savedScroll = getScrollPosition('home');
+      if (savedScroll > 0) {
+        window.scrollTo({
+          top: savedScroll,
+          behavior: 'instant'
+        });
+        clearScrollPosition('home');
+      }
+    }
+  }, [isLoading]);
+
+  // Handle bookmark toggle
+  const handleToggleBookmark = async (id) => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await bookmarkApi.addBookmark(id);
+      if (res && typeof res.bookmarked === 'boolean') {
+        setBookmarkedIds(prev => {
+          if (res.bookmarked) {
+            return prev.includes(id) ? prev : [...prev, id];
+          } else {
+            return prev.filter(item => item !== id);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+      showToast('Failed to update bookmark');
+    }
+  };
 
   return (
     <div className="feed-container">
-      {/* Tabs */}
-      <div className="tab-nav-wrapper" style={{ marginTop: 0 }}>
-        <div className="feed-tabs">
-          {tabs.map(tab => (
-            <div
-              key={tab.id}
-              className={`feed-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </div>
-          ))}
-        </div>
+      {/* Feed Header */}
+      <div className="tab-nav-wrapper" style={{ marginTop: 0, justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)' }}>
+        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>Home Feed</h2>
         <button 
           className="btn-refresh-feed" 
-          onClick={loadFeed}
-          disabled={isLoading}
+          onClick={handleRefreshFeed}
+          disabled={isLoading || isRefreshing}
           title="Refresh Feed"
         >
-          <RefreshCw size={15} className={isLoading ? 'spin-animation' : ''} />
+          <RefreshCw size={15} className={isLoading || isRefreshing ? 'spin-animation' : ''} />
           <span>Refresh</span>
         </button>
       </div>

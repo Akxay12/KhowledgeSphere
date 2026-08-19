@@ -29,6 +29,9 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [animatingError, setAnimatingError] = useState(false);
+  const [fallbackEmail, setFallbackEmail] = useState('');
+  const [fallbackPassword, setFallbackPassword] = useState('');
 
   // Touched state for inline validation feedback
   const [touched, setTouched] = useState({
@@ -54,6 +57,15 @@ export default function Login() {
       navigate('/home', { replace: true });
     }
   }, [user, navigate]);
+
+  // Check for expired session query parameter on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('expired') === 'true') {
+      setErrorMessage('Your session has expired. Please log in again.');
+      setErrorType('SESSION_EXPIRED');
+    }
+  }, []);
 
 
   // Inline Validation Helpers
@@ -88,8 +100,26 @@ export default function Login() {
       });
     } catch (err) {
       setIsSigningIn(false);
-      setErrorType('INVALID_CREDENTIALS');
-      setErrorMessage(err.response?.data?.message || err.message || 'Invalid email or password. Please check your credentials and try again.');
+      if (err.status === 403 || err.response?.status === 403) {
+        setFallbackEmail(email);
+        setFallbackPassword('•'.repeat(password.length));
+        setAnimatingError(true);
+        setErrorType('INVALID_CREDENTIALS');
+        setErrorMessage('🧐 who are you 🔫🤨');
+        
+        // Clear fields instantly
+        setEmail('');
+        setPassword('');
+        
+        setTimeout(() => {
+          setAnimatingError(false);
+          setFallbackEmail('');
+          setFallbackPassword('');
+        }, 800);
+      } else {
+        setErrorType('INVALID_CREDENTIALS');
+        setErrorMessage(err.message || 'Invalid Email or Password');
+      }
     }
   };
 
@@ -180,11 +210,21 @@ export default function Login() {
         {/* ELEGANT ERROR BANNER */}
         {errorMessage && (
           <div className="login-error-banner" role="alert">
-            <div className="error-banner-icon">
-              <AlertCircle size={20} />
-            </div>
-            <div className="error-banner-content">
-              <span className="error-banner-text">{errorMessage}</span>
+            {errorMessage !== '🧐 who are you 🔫🤨' && (
+              <div className="error-banner-icon">
+                <AlertCircle size={20} />
+              </div>
+            )}
+            <div className="error-banner-content" style={errorMessage === '🧐 who are you 🔫🤨' ? { display: 'flex', justifyContent: 'center', width: '100%' } : {}}>
+              {errorMessage === '🧐 who are you 🔫🤨' ? (
+                <span className="playful-error-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+                  <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>🧐</span>
+                  <span style={{ fontSize: '1.05rem', color: '#dc2626' }}>who are you</span>
+                  <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>🔫🤨</span>
+                </span>
+              ) : (
+                <span className="error-banner-text">{errorMessage}</span>
+              )}
             </div>
             <button
               type="button"
@@ -204,10 +244,10 @@ export default function Login() {
         <form onSubmit={handleEmailPasswordSubmit} className="login-form" noValidate>
           {/* FIELD 1: Email Address */}
           <div className="form-group">
-            <label htmlFor="login-email" className="form-label">
+            <label htmlFor="login-email" className="login-form-label">
               Email Address <span className="req-star">*</span>
             </label>
-            <div className={`input-icon-wrapper ${touched.email && !isEmailValid ? 'has-error' : ''}`}>
+            <div className={`input-icon-wrapper ${touched.email && !isEmailValid ? 'has-error' : ''} ${animatingError ? 'shake-inputs' : ''}`}>
               <Mail className="input-field-icon" size={18} />
               <input
                 id="login-email"
@@ -215,11 +255,22 @@ export default function Login() {
                 className="form-input-styled"
                 placeholder="Enter your email address"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errorMessage) {
+                    setErrorMessage('');
+                    setErrorType('');
+                  }
+                }}
                 onBlur={() => handleBlur('email')}
                 disabled={isSigningIn || isGoogleSigningIn}
                 autoComplete="email"
               />
+              {animatingError && fallbackEmail && (
+                <div className="falling-text-overlay falling-text">
+                  {fallbackEmail}
+                </div>
+              )}
             </div>
             {touched.email && !isEmailValid && email.length > 0 && (
               <span className="field-inline-error">Please enter a valid email address.</span>
@@ -232,11 +283,11 @@ export default function Login() {
           {/* FIELD 2: Password */}
           <div className="form-group">
             <div className="label-with-action">
-              <label htmlFor="login-password" className="form-label">
+              <label htmlFor="login-password" className="login-form-label">
                 Password <span className="req-star">*</span>
               </label>
             </div>
-            <div className={`input-icon-wrapper ${touched.password && !isPasswordValid ? 'has-error' : ''}`}>
+            <div className={`input-icon-wrapper ${touched.password && !isPasswordValid ? 'has-error' : ''} ${animatingError ? 'shake-inputs' : ''}`}>
               <Lock className="input-field-icon" size={18} />
               <input
                 id="login-password"
@@ -244,7 +295,13 @@ export default function Login() {
                 className="form-input-styled pr-toggle"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errorMessage) {
+                    setErrorMessage('');
+                    setErrorType('');
+                  }
+                }}
                 onBlur={() => handleBlur('password')}
                 disabled={isSigningIn || isGoogleSigningIn}
                 autoComplete="current-password"
@@ -258,6 +315,11 @@ export default function Login() {
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
+              {animatingError && fallbackPassword && (
+                <div className="falling-text-overlay falling-text">
+                  {fallbackPassword}
+                </div>
+              )}
             </div>
             {touched.password && !isPasswordValid && (
               <span className="field-inline-error">Password is required.</span>

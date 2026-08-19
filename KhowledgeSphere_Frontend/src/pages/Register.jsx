@@ -214,24 +214,25 @@ export default function Register() {
     setIsSubmitting(true);
 
     try {
-      await authRegister({
+      const response = await authRegister({
         name: fullName.trim(),
-        email: email.trim(),
         username: username.trim(),
-        password
+        email: email.trim(),
+        password,
+        bio: "",
+        profession: "",
+        location: "",
+        linkedinUrl: "",
+        linkdinUrl: ""
       });
 
-      setSuccessMessage('Account created successfully! Redirecting...');
+      setSuccessMessage(response || 'Account Created Sucessfully');
       setTimeout(() => {
-        triggerTransition('/home', {
-          title: 'Welcome to KnowledgeSphere',
-          message: 'Setting up your profile...',
-          submessage: 'Preparing your academic workspace...'
-        });
-      }, 1000);
+        triggerTransition('/login');
+      }, 2000);
     } catch (err) {
       setIsSubmitting(false);
-      setAuthError(err.response?.data?.message || err.message || 'Failed to create account. Please try again.');
+      setAuthError(err.message || 'Failed to create account. Please try again.');
     }
   };
 

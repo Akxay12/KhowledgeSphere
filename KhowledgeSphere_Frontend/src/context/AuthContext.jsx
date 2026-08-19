@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getStoredUserProfile, getStoredAuthSession, saveUserProfile, isUserAuthenticated } from '../lib/authStorage';
 import { loginApi, signupApi, googleLoginApi, logoutApi } from '../api/auth';
-import { getCurrentUserApi } from '../api/user';
+import { getCurrentUserApi, getProfilePictureApi } from '../api/user';
+import { getFollowingApi, toggleFollowApi } from '../api/follows';
+import { getLikesApi } from '../api/publication';
+
 
 const AuthContext = createContext(null);
 
@@ -10,27 +13,104 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => getStoredAuthSession());
   const [isAuthenticated, setIsAuthenticated] = useState(() => isUserAuthenticated());
   const [isLoading, setIsLoading] = useState(true);
+  const [followingIds, setFollowingIds] = useState(new Set());
+  const [likedPublicationIds, setLikedPublicationIds] = useState(new Set());
+
+  const fetchFollowingList = async () => {
+    try {
+      const response = await getFollowingApi();
+      const ids = Array.isArray(response) ? response : [];
+      setFollowingIds(new Set(ids.map(id => parseInt(id, 10))));
+    } catch (e) {
+      console.warn('Error fetching following list:', e);
+    }
+  };
+
+  const fetchLikedList = async () => {
+    try {
+      const response = await getLikesApi();
+      const ids = Array.isArray(response) ? response : [];
+      setLikedPublicationIds(new Set(ids.map(String)));
+    } catch (e) {
+      console.warn('Error fetching liked list:', e);
+    }
+  };
+
+  const toggleFollow = async (userId) => {
+    try {
+      const response = await toggleFollowApi(userId);
+      const isFollowing = response?.following;
+      setFollowingIds(prev => {
+        const next = new Set(prev);
+        const intId = parseInt(userId, 10);
+        if (isFollowing) {
+          next.add(intId);
+        } else {
+          next.delete(intId);
+        }
+        return next;
+      });
+      return response;
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+      throw error;
+    }
+  };
+
+  const fetchProfilePicture = async (userId) => {
+    if (!userId) return;
+    try {
+      const avatarBlob = await getProfilePictureApi(userId);
+      if (avatarBlob && avatarBlob.size > 0) {
+        const avatarUrl = URL.createObjectURL(avatarBlob);
+        setUser(prev => prev ? { ...prev, avatarImage: avatarUrl } : null);
+      }
+    } catch (e) {
+      // Ignore API errors, fallback to placeholder
+    }
+  };
+
+  const fetchProfileImages = async (userId) => {
+    await fetchProfilePicture(userId);
+  };
+
 
   // Initialize Auth state from local cache or API validation
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const storedSession = getStoredAuthSession();
-        const storedProfile = getStoredUserProfile();
+        const token = localStorage.getItem('token');
+        const rawUser = localStorage.getItem('loggedInUser');
 
-        if (storedSession && (storedSession.token || storedSession.accessToken || storedSession.isAuthenticated)) {
+        if (token && rawUser) {
           setIsAuthenticated(true);
-          setUser(storedProfile);
+          const parsedUser = JSON.parse(rawUser);
+          setUser(parsedUser);
+
+          const userId = parsedUser?.userId || parsedUser?.id;
+          if (userId) {
+            fetchProfileImages(userId);
+          }
+
+          // Fetch follow list
+          await fetchFollowingList();
+
+          // Fetch liked list
+          await fetchLikedList();
 
           // Optionally validate with backend API
           try {
             const freshUser = await getCurrentUserApi();
             if (freshUser) {
-              const updated = saveUserProfile(freshUser);
-              setUser(updated);
+              localStorage.setItem('loggedInUser', JSON.stringify(freshUser));
+              setUser(freshUser);
+              const freshUserId = freshUser?.userId || freshUser?.id;
+              if (freshUserId) {
+                fetchProfileImages(freshUserId);
+              }
             }
           } catch (e) {
-            // API offline or token invalid - keep stored profile for preview resilience
+            console.warn('Error validating user session on mount:', e);
           }
         } else {
           setIsAuthenticated(false);
@@ -50,31 +130,41 @@ export function AuthProvider({ children }) {
     try {
       // Call backend REST API endpoint
       const response = await loginApi({ email, password });
-      const userProfile = response.user || response;
-      const saved = saveUserProfile({
-        ...userProfile,
-        accessToken: response.token || response.accessToken,
-      });
-      setUser(saved);
+      
+      const token = response?.token || response?.data?.token;
+      if (token) {
+        localStorage.setItem('token', token);
+        console.log("Stored Token:", localStorage.getItem("token"));
+      }
+
+      // Store the exact returned user object in localStorage using the key loggedInUser
+      localStorage.setItem('loggedInUser', JSON.stringify(response));
+
+      setUser(response);
       setIsAuthenticated(true);
-      return { success: true, user: saved };
+      
+      const userId = response?.userId || response?.id;
+      if (userId) {
+        fetchProfileImages(userId);
+      }
+
+      // Fetch following list
+      await fetchFollowingList();
+
+      // Fetch liked list
+      await fetchLikedList();
+
+      return { success: true, user: response };
     } catch (error) {
-      // Propagation to component for proper UI error feedback
       throw error;
     }
   };
 
   const register = async (userData) => {
     try {
+      // Calls backend signup endpoint which returns plain string response on success
       const response = await signupApi(userData);
-      const userProfile = response.user || response;
-      const saved = saveUserProfile({
-        ...userProfile,
-        accessToken: response.token || response.accessToken,
-      });
-      setUser(saved);
-      setIsAuthenticated(true);
-      return { success: true, user: saved };
+      return response;
     } catch (error) {
       throw error;
     }
@@ -84,13 +174,21 @@ export function AuthProvider({ children }) {
     try {
       const response = await googleLoginApi(googleAuthData);
       const userProfile = response.user || response;
-      const saved = saveUserProfile({
-        ...userProfile,
-        accessToken: response.token || response.accessToken,
-      });
-      setUser(saved);
+      const token = response.token || response.accessToken;
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+      localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
+      setUser(userProfile);
       setIsAuthenticated(true);
-      return { success: true, user: saved };
+
+      // Fetch following list
+      await fetchFollowingList();
+
+      // Fetch liked list
+      await fetchLikedList();
+
+      return { success: true, user: userProfile };
     } catch (error) {
       throw error;
     }
@@ -102,17 +200,26 @@ export function AuthProvider({ children }) {
     } catch (e) {
       // Ignore API disconnect errors on logout
     } finally {
-      localStorage.removeItem('knowledgesphere_user_profile');
-      localStorage.removeItem('knowledgesphere_auth_session');
+      if (localStorage.getItem('token')) {
+        localStorage.clear();
+      }
       setUser(null);
       setSession(null);
       setIsAuthenticated(false);
+      setFollowingIds(new Set());
+      setLikedPublicationIds(new Set());
     }
   };
 
   const updateProfile = (profileData) => {
     const updated = saveUserProfile(profileData);
-    setUser(updated);
+    setUser(prev => {
+      if (!prev) return updated;
+      return {
+        ...updated,
+        avatarImage: prev.avatarImage || updated.avatarImage
+      };
+    });
     return updated;
   };
 
@@ -128,6 +235,12 @@ export function AuthProvider({ children }) {
         loginWithGoogle,
         logout,
         updateProfile,
+        fetchProfileImages,
+        fetchProfilePicture,
+        followingIds,
+        toggleFollow,
+        likedPublicationIds,
+        setLikedPublicationIds,
       }}
     >
       {children}

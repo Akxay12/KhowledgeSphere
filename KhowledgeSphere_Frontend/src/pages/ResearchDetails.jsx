@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Heart, Bookmark, Share2, Calendar, Clock, MessageSquare, Send, BookOpen, User, Sparkles, ExternalLink, Headphones, Square, Play, UserPlus } from 'lucide-react';
-import { fetchPublicationById, fetchPublications } from '../services/publicationService';
-
+import { ArrowLeft, Heart, Bookmark, Share2, Calendar, Clock, MessageSquare, Send, BookOpen, User, Sparkles, ExternalLink, Headphones, Square, Play, UserPlus, Trash2 } from 'lucide-react';
+import { fetchPublicationById, fetchPublications, fetchComments, addComment, deleteComment, toggleLike } from '../services/publicationService';
+import { showToast } from '../lib/toast';
 import { useAuth } from '../context/AuthContext';
+import { bookmarkApi } from '../api/bookmark';
+import { handleProfileNavigate } from '../lib/profileNavigation';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import ImageWithFallback from '../components/ImageWithFallback';
@@ -97,11 +99,12 @@ function HighlightableText({
 export default function ResearchDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user: authUser, followingIds, toggleFollow, likedPublicationIds, setLikedPublicationIds } = useAuth();
 
   const [paper, setPaper] = useState(null);
   const [allPapers, setAllPapers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState(null); // '404' or 'error'
 
   // Speech synthesis state
   const [isListening, setIsListening] = useState(false);
@@ -114,31 +117,38 @@ export default function ResearchDetails() {
   const isCancelledRef = useRef(false);
 
   useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'auto'
+    });
     setLoading(true);
+    setErrorState(null);
     fetchPublicationById(id)
       .then((res) => {
         if (res.success && res.data) {
           setPaper(res.data);
         } else {
           setPaper(null);
+          if (res.status === 404 || res.error === 'Research Not Found' || res.error === 'Publication not found') {
+            setErrorState('404');
+          } else {
+            setErrorState('error');
+          }
         }
       })
       .catch((err) => {
         console.error('Error fetching paper:', err);
         setPaper(null);
+        if (err.status === 404) {
+          setErrorState('404');
+        } else {
+          setErrorState('error');
+        }
       })
       .finally(() => {
         setLoading(false);
       });
-
-    fetchPublications()
-      .then((res) => {
-        setAllPapers(res.data || []);
-      })
-      .catch(() => {});
   }, [id]);
-
-
 
   const getReferencesForPaper = (currentPaper) => {
     if (!currentPaper) return [];
@@ -199,112 +209,168 @@ export default function ResearchDetails() {
       ];
     }
 
-    const authorLastName = currentPaper.authors ? currentPaper.authors.split(' ')[0].replace(/,/g, '') : 'Author';
-    return [
-      {
-        id: 1,
-        citation: `${authorLastName}, A. et al. (${currentPaper.year}). Emerging paradigms in ${currentPaper.field.split('/')[1] || currentPaper.field}. Global Journal of Advanced Research, 14(2), pp. 118-132.`,
-        description: `A foundational academic study detailing innovative research models, practical case observations, and core methodologies in ${currentPaper.field.toLowerCase()}.`,
-        url: "https://scholar.google.com"
-      },
-      {
-        id: 2,
-        citation: `International Scholarly Consortium. (${parseInt(currentPaper.year) - 2 || 2024}). Methodological safety, logical alignment, and quality assurance frameworks in modern decentralized research. Scholarly Agency Review, 42(1).`,
-        description: `An extensively peer-reviewed whitepaper laying out global industry guidelines and compliance standards for research validation in the global community.`,
-        url: ""
-      }
-    ];
+    return [];
   };
 
   const references = getReferencesForPaper(paper);
 
-  const [isLiked, setIsLiked] = useState(false);
+  const paperIdStr = String(paper?.publicationId || paper?.id || id);
+  const isLiked = isAuthenticated && likedPublicationIds && likedPublicationIds.has(paperIdStr);
+  const [likeCount, setLikeCount] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
+
+  useEffect(() => {
+    if (paper) {
+      setLikeCount(paper.likeCount ?? 0);
+    }
+  }, [paper]);
+  const authorUserId = paper?.userId ? parseInt(paper.userId, 10) : null;
+  const loggedInUserId = authUser?.userId || authUser?.id;
+  const isOwnPaper = authorUserId && loggedInUserId && parseInt(authorUserId, 10) === parseInt(loggedInUserId, 10);
+  const isFollowing = authorUserId && followingIds ? followingIds.has(authorUserId) : false;
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authActionText, setAuthActionText] = useState('');
 
   useEffect(() => {
     if (!paper) return;
-    try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      const parsed = saved ? JSON.parse(saved) : [];
-      setIsBookmarked(parsed.includes(paper.id));
-    } catch {
+    if (isAuthenticated) {
+      bookmarkApi.getBookmarks()
+        .then((res) => {
+          const apiIds = Array.isArray(res) 
+            ? res 
+            : (res && Array.isArray(res.data) ? res.data : []);
+          const bookmarkIds = apiIds.map(id => typeof id === 'object' ? (id.publicationId || id.id) : id);
+          setIsBookmarked(bookmarkIds.includes(paper.id));
+        })
+        .catch((err) => {
+          console.error("Failed to load bookmarks in details:", err);
+          setIsBookmarked(false);
+        });
+    } else {
       setIsBookmarked(false);
     }
-  }, [paper]);
+  }, [paper, isAuthenticated]);
 
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsError, setCommentsError] = useState(false);
 
-  const handleLikeClick = () => {
-    if (!isAuthenticated) {
-      setAuthActionText('like publications');
-      setShowAuthModal(true);
+  useEffect(() => {
+    if (!id) return;
+    
+    setCommentsLoading(true);
+    setCommentsError(false);
+    setComments([]);
+
+    fetchComments(id)
+      .then((res) => {
+        if (res.success) {
+          setComments(res.data || []);
+        } else {
+          console.error("Failed to load comments:", res.error);
+          setCommentsError(true);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading comments:", err);
+        setCommentsError(true);
+      })
+      .finally(() => {
+        setCommentsLoading(false);
+      });
+  }, [id]);
+
+  const isLoggedIn = !!localStorage.getItem("loggedInUser");
+
+  const handleLikeClick = async () => {
+    if (!isLoggedIn) {
+      showToast("Login to access this feature");
       return;
     }
-    setIsLiked(!isLiked);
+    try {
+      const res = await toggleLike(paperIdStr);
+      if (res) {
+        setLikeCount(res.likeCount);
+        if (setLikedPublicationIds && res.likedPublicationIds) {
+          setLikedPublicationIds(new Set(res.likedPublicationIds.map(String)));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to toggle like:", err);
+      showToast("Try again later");
+    }
   };
 
   const handleBookmarkClick = () => {
-    if (!isAuthenticated) {
-      setAuthActionText('save bookmarks');
-      setShowAuthModal(true);
+    if (!isLoggedIn) {
+      showToast("Login to access this feature");
       return;
     }
     handleToggleBookmark();
   };
 
-  const handleFollowClick = () => {
-    if (!isAuthenticated) {
-      setAuthActionText('follow authors');
-      setShowAuthModal(true);
+  const handleFollowClick = async () => {
+    if (!isLoggedIn) {
+      showToast("Login to access this feature");
       return;
     }
-    setIsFollowing(!isFollowing);
-  };
-
-
-  // Sync bookmark to local storage
-  const handleToggleBookmark = () => {
-    if (!paper) return;
+    if (!authorUserId) return;
     try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      let parsed = saved ? JSON.parse(saved) : [];
-      if (parsed.includes(paper.id)) {
-        parsed = parsed.filter(item => item !== paper.id);
-        setIsBookmarked(false);
-      } else {
-        parsed.push(paper.id);
-        setIsBookmarked(true);
-      }
-      localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(parsed));
-    } catch (e) {
-      console.error(e);
+      await toggleFollow(authorUserId);
+    } catch (err) {
+      console.error("Failed to toggle follow:", err);
+      showToast(err?.message || "Failed to update follow state");
     }
   };
 
-  const handlePostComment = (e) => {
-    e.preventDefault();
-    if (!isAuthenticated) {
-      setAuthActionText('post comments and peer feedback');
-      setShowAuthModal(true);
-      return;
+
+  // Sync bookmark to backend API
+  const handleToggleBookmark = async () => {
+    if (!paper) return;
+    if (!isAuthenticated) return;
+    try {
+      const res = await bookmarkApi.addBookmark(paper.id);
+      if (res && typeof res.bookmarked === 'boolean') {
+        setIsBookmarked(res.bookmarked);
+      }
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+      showToast('Failed to update bookmark');
     }
-    if (!commentText.trim()) return;
+  };
 
+  const handlePostComment = async (e) => {
+    e.preventDefault();
+    const trimmed = commentText.trim();
+    if (!trimmed) return;
 
-    const newComment = {
-      id: Date.now(),
-      author: 'Scholar User',
-      handle: '@scholar',
-      text: commentText,
-      date: 'Just now'
-    };
+    try {
+      const res = await addComment(id, trimmed);
+      if (res.success && res.data) {
+        setComments(prev => [res.data, ...prev]);
+        setCommentText('');
+      } else {
+        showToast(res.error?.message || "Failed to post comment");
+      }
+    } catch (err) {
+      console.error("Error posting comment:", err);
+      showToast("Failed to post comment");
+    }
+  };
 
-    setComments([newComment, ...comments]);
-    setCommentText('');
+  const handleDeleteComment = async (commentId) => {
+    try {
+      const res = await deleteComment(commentId);
+      if (res.success) {
+        setComments(prev => prev.filter(c => (c.commentId || c.id) !== commentId));
+      } else {
+        showToast(res.error?.message || "Failed to delete comment");
+      }
+    } catch (err) {
+      console.error("Error deleting comment:", err);
+      showToast("Failed to delete comment");
+    }
   };
 
   // Extract primary initials for the author avatar
@@ -335,7 +401,7 @@ export default function ResearchDetails() {
     }
 
     // 2. Subtitle / Summary
-    const subtitle = `An in-depth empirical exploration concerning ${currentPaper.field ? currentPaper.field.toLowerCase() : 'research'} methodologies and academic impacts.`;
+    const subtitle = currentPaper.subtitle || `An in-depth empirical exploration concerning ${currentPaper.field ? currentPaper.field.toLowerCase() : 'research'} methodologies and academic impacts.`;
     const subtitleSentences = splitIntoSentences(subtitle);
     subtitleSentences.forEach((sText, sIdx) => {
       items.push({
@@ -371,39 +437,6 @@ export default function ResearchDetails() {
               });
             }
           });
-        }
-      });
-    } else if (currentPaper.content) {
-      const sections = currentPaper.content.split('\n\n');
-      sections.forEach((section, sIdx) => {
-        const trimmed = section.trim();
-        if (!trimmed || trimmed.startsWith('Full Article Content:')) return;
-
-        if (trimmed.startsWith('- ') || trimmed.includes('\n- ')) {
-          const listItems = trimmed
-            .split('\n')
-            .map(line => line.replace(/^-\s*/, '').trim())
-            .filter(Boolean);
-          listItems.forEach((itemText, lIdx) => {
-            const sentences = splitIntoSentences(itemText);
-            sentences.forEach((sText, sIdxSent) => {
-              items.push({
-                id: `speech-content-${sIdx}-item-${lIdx}-sent-${sIdxSent}`,
-                text: sText,
-              });
-            });
-          });
-        } else {
-          const cleanText = trimmed.replace(/^###\s*/, '').replace(/^##\s*/, '').replace(/^>\s*/, '').trim();
-          if (cleanText) {
-            const sentences = splitIntoSentences(cleanText);
-            sentences.forEach((sText, sIdxSent) => {
-              items.push({
-                id: `speech-content-${sIdx}-sent-${sIdxSent}`,
-                text: sText,
-              });
-            });
-          }
         }
       });
     }
@@ -526,15 +559,30 @@ export default function ResearchDetails() {
   }
 
   // Publication Not Found error state
-  if (!paper) {
+  if (errorState === '404' || !paper) {
     return (
       <div className="reader-wrapper" style={{ padding: '60px 20px', display: 'flex', justifyContent: 'center' }}>
         <ErrorState
           type="publication_not_found"
-          title="Publication Not Found"
-          description="This publication may have been deleted or is no longer available."
+          title="Research Not Found"
+          description="The requested research paper could not be found or has been removed."
           actionText="Browse Publications"
           onAction={() => navigate('/explore')}
+        />
+      </div>
+    );
+  }
+
+  // General error state
+  if (errorState === 'error') {
+    return (
+      <div className="reader-wrapper" style={{ padding: '60px 20px', display: 'flex', justifyContent: 'center' }}>
+        <ErrorState
+          type="server"
+          title="Error Loading Research"
+          description="There was a problem loading this research. Please check your network and try again."
+          actionText="Retry"
+          onAction={() => window.location.reload()}
         />
       </div>
     );
@@ -545,6 +593,7 @@ export default function ResearchDetails() {
 
   // Find academic institution mock based on author
   const getAffiliation = (authors) => {
+    if (!authors || typeof authors !== 'string') return 'Stanford Center for Advanced Study & Digital Humanities';
     if (authors.includes('Jenkins')) return 'MIT Cognitive Science & Artificial Intelligence Lab';
     if (authors.includes('Vance')) return 'University of Toronto, Department of Philosophy & Epistemology';
     return 'Stanford Center for Advanced Study & Digital Humanities';
@@ -651,13 +700,16 @@ export default function ResearchDetails() {
             className={`reader-circle-btn ${isLiked ? 'liked' : ''}`}
             onClick={handleLikeClick}
             title={isLiked ? 'Unlike' : 'Like Article'}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', width: 'auto', padding: '0 12px', borderRadius: '20px' }}
           >
-            <Heart size={18} fill={isLiked ? 'var(--color-primary)' : 'none'} />
+            <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
+            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{likeCount}</span>
           </button>
-          <button 
+           <button 
             className={`reader-circle-btn ${isBookmarked ? 'bookmarked' : ''}`}
             onClick={handleBookmarkClick}
             title={isBookmarked ? 'Remove Bookmark' : 'Save Article'}
+            style={!isLoggedIn ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
           >
             <Bookmark size={18} fill={isBookmarked ? 'var(--color-primary)' : 'none'} />
           </button>
@@ -706,12 +758,6 @@ export default function ResearchDetails() {
           />
         </div>
 
-        {/* Article Taxonomy Badges */}
-        <div className="reader-taxonomy-row">
-          <span className="reader-badge-field">{paper.field}</span>
-          <span className="reader-badge-type">{paper.type}</span>
-        </div>
-
         {/* Title & Subtitle */}
         <HighlightableText
           text={paper.title}
@@ -721,42 +767,75 @@ export default function ResearchDetails() {
           className="reader-article-title"
         />
         <HighlightableText
-          text={`An in-depth empirical exploration concerning ${paper.field ? paper.field.toLowerCase() : 'research'} methodologies and academic impacts published in ${paper.language || 'English'}.`}
+          text={paper.subtitle || `An in-depth empirical exploration concerning ${paper.field ? paper.field.toLowerCase() : 'research'} methodologies and academic impacts published in ${paper.language || 'English'}.`}
           speechIdPrefix="speech-subtitle"
           activeSpeechId={activeSpeechId}
           tag="p"
           className="reader-article-subtitle"
         />
 
+        {/* Taxonomy Row Below Subtitle (Ensuring category visible below title) */}
+        <div className="reader-taxonomy-row" style={{ margin: '16px 0', display: 'flex', gap: '8px' }}>
+          <span className="reader-badge-field" style={{ backgroundColor: 'var(--color-primary-light, #fef2f2)', color: 'var(--color-primary, #7A1F1F)', padding: '6px 14px', borderRadius: '100px', fontWeight: 600, fontSize: '0.82rem' }}>
+            {paper.category || paper.field || 'General'}
+          </span>
+        </div>
+
         {/* Author information & Affiliation */}
         <div className="reader-author-section">
-          <div className="reader-avatar">
-            {getInitials(paper.authors)}
+          <div 
+            className="reader-avatar"
+            onClick={() => paper.userId && handleProfileNavigate(navigate, paper.userId)}
+            style={{ cursor: paper.userId ? 'pointer' : 'default', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {paper.userId ? (
+              <ImageWithFallback
+                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/${paper.userId}/picture`}
+                alt={paper.authors}
+                fallbackType="avatar"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              />
+            ) : (
+              getInitials(paper.authors)
+            )}
           </div>
           <div className="reader-author-info">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
-              <span className="reader-author-names">{paper.authors}</span>
-              <button
-                type="button"
-                className="btn-follow-author"
-                onClick={handleFollowClick}
-                style={{
-                  backgroundColor: isFollowing ? '#f1f5f9' : '#7A1F1F',
-                  color: isFollowing ? '#334155' : '#ffffff',
-                  border: isFollowing ? '1px solid #cbd5e1' : 'none',
-                  padding: '6px 14px',
-                  borderRadius: '20px',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-              >
-                <UserPlus size={14} />
-                <span>{isFollowing ? 'Following' : 'Follow Author'}</span>
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span 
+                  className="reader-author-names"
+                  onClick={() => paper.userId && handleProfileNavigate(navigate, paper.userId)}
+                  style={{ cursor: paper.userId ? 'pointer' : 'default', textDecoration: paper.userId ? 'underline' : 'none' }}
+                >
+                  {paper.authors}
+                </span>
+                <span className="reader-badge-type" style={{ backgroundColor: 'var(--color-primary-light, #fef2f2)', border: '1px solid var(--color-primary, #7A1F1F)', color: 'var(--color-primary, #7A1F1F)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  {paper.type || 'General'}
+                </span>
+              </div>
+              {!isOwnPaper && (
+                <button
+                  type="button"
+                  className="btn-follow-author"
+                  onClick={handleFollowClick}
+                  style={{
+                    backgroundColor: isFollowing ? '#f1f5f9' : '#7A1F1F',
+                    color: isFollowing ? '#334155' : '#ffffff',
+                    border: isFollowing ? '1px solid #cbd5e1' : 'none',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <UserPlus size={14} />
+                  <span>{isFollowing ? 'Following' : 'Follow Author'}</span>
+                </button>
+              )}
             </div>
             <span className="reader-author-affiliation">{getAffiliation(paper.authors)}</span>
             
@@ -949,83 +1028,99 @@ export default function ResearchDetails() {
                 );
               })}
             </div>
-          ) : (
-            renderArticleContent(paper.content)
-          )}
+          ) : null}
         </div>
 
-        <hr className="reader-divider" />
+        {references && references.length > 0 && (
+          <>
+            <hr className="reader-divider" />
 
-        {/* References Section */}
-        <div className="reader-references-section">
-          <h3 className="reader-section-sub">
-            <BookOpen size={18} />
-            <span>Academic References</span>
-          </h3>
-          <div className="reader-references-container">
-            {references.map((ref) => (
-              <div key={ref.id} className="reader-reference-item-card" id={`reference-${ref.id}`}>
-                <div className="ref-card-header">
-                  <span className="ref-card-number">[{ref.id}]</span>
-                  <p className="ref-card-citation">{ref.citation}</p>
-                </div>
-                {ref.description && (
-                  <div className="ref-card-body">
-                    <span className="ref-card-desc-label">Description</span>
-                    <p className="ref-card-description">{ref.description}</p>
+            {/* References Section */}
+            <div className="reader-references-section">
+              <h3 className="reader-section-sub">
+                <BookOpen size={18} />
+                <span>Academic References</span>
+              </h3>
+              <div className="reader-references-container">
+                {references.map((ref) => (
+                  <div key={ref.id} className="reader-reference-item-card" id={`reference-${ref.id}`}>
+                    <div className="ref-card-header">
+                      <span className="ref-card-number">[{ref.id}]</span>
+                      <p className="ref-card-citation">{ref.citation}</p>
+                    </div>
+                    {ref.description && (
+                      <div className="ref-card-body">
+                        <span className="ref-card-desc-label">Description</span>
+                        <p className="ref-card-description">{ref.description}</p>
+                      </div>
+                    )}
+                    {ref.url && (
+                      <div className="ref-card-footer">
+                        <a 
+                          href={ref.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="ref-card-link-btn"
+                          id={`reference-link-${ref.id}`}
+                        >
+                          <span>View Reference</span>
+                          <ExternalLink size={14} style={{ color: '#2563eb' }} />
+                        </a>
+                      </div>
+                    )}
                   </div>
-                )}
-                {ref.url && (
-                  <div className="ref-card-footer">
-                    <a 
-                      href={ref.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="ref-card-link-btn"
-                      id={`reference-link-${ref.id}`}
-                    >
-                      <span>View Reference</span>
-                      <ExternalLink size={14} style={{ color: '#2563eb' }} />
-                    </a>
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
-        <hr className="reader-divider" />
-
-        {/* Related Articles Section */}
-        <div className="reader-related-section">
-          <h3 className="reader-section-sub">
-            <Sparkles size={18} />
-            <span>Continue Reading</span>
-          </h3>
-          <div className="reader-related-grid">
-            {relatedArticles.map(article => (
-              <div 
-                key={article.id} 
-                className="reader-related-card"
-                onClick={() => {
-                  navigate(`/research/${article.id}`);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              >
-                {article.coverImage && (
-                  <div className="related-img-container">
-                    <img src={article.coverImage} alt={article.title} referrerPolicy="no-referrer" />
+        {relatedArticles.length > 0 && (
+          <>
+            <hr className="reader-divider" />
+            {/* Related Articles Section */}
+            <div className="reader-related-section">
+              <h3 className="reader-section-sub">
+                <Sparkles size={18} />
+                <span>Continue Reading</span>
+              </h3>
+              <div className="reader-related-grid">
+                {relatedArticles.map(article => (
+                  <div 
+                    key={article.id} 
+                    className="reader-related-card"
+                    onClick={() => {
+                      navigate(`/research/${article.id}`);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    {article.coverImage && (
+                      <div className="related-img-container">
+                        <img src={article.coverImage} alt={article.title} referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                    <div className="related-card-content">
+                      <span className="related-badge">{article.type}</span>
+                      <h4>{article.title}</h4>
+                      <span 
+                        className="related-authors"
+                        onClick={(e) => {
+                          if (article.userId) {
+                            e.stopPropagation();
+                            handleProfileNavigate(navigate, article.userId);
+                          }
+                        }}
+                        style={{ cursor: article.userId ? 'pointer' : 'default', textDecoration: article.userId ? 'underline' : 'none' }}
+                      >
+                        {article.authors}
+                      </span>
+                    </div>
                   </div>
-                )}
-                <div className="related-card-content">
-                  <span className="related-badge">{article.type}</span>
-                  <h4>{article.title}</h4>
-                  <span className="related-authors">{article.authors}</span>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
         <hr className="reader-divider" />
 
@@ -1036,37 +1131,77 @@ export default function ResearchDetails() {
             <span>Discussion & Peer Feedback</span>
           </h3>
 
-          <form onSubmit={handlePostComment} className="reader-comment-form">
-            <textarea
-              className="reader-comment-input"
-              placeholder="Add your review, feedback, or ask a question regarding this paper..."
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              required
-            />
-            <button type="submit" className="reader-comment-submit-btn">
-              <Send size={14} />
-              <span>Post Comment</span>
-            </button>
-          </form>
+          {isAuthenticated && (
+            <form onSubmit={handlePostComment} className="discussion-composer">
+              <textarea
+                className="discussion-composer-input"
+                placeholder="Write a comment..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                required
+              />
+              <div className="discussion-composer-actions">
+                {commentText.trim() !== '' && (
+                  <button type="submit" className="discussion-composer-submit-btn">
+                    <span>Send</span>
+                    <Send size={14} />
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
 
           <div className="reader-comments-list">
-            {comments.length > 0 ? (
-              comments.map(c => (
-                <div key={c.id} className="reader-comment-card">
-                  <div className="comment-header">
-                    <div className="comment-avatar">
-                      <span>AV</span>
+            {commentsLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)' }}>
+                Loading comments...
+              </div>
+            ) : commentsError ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-error, #dc2626)' }}>
+                Failed to load comments.
+              </div>
+            ) : comments.length > 0 ? (
+              comments.map(c => {
+                const isCommentOwner = loggedInUserId && c.userId && String(loggedInUserId) === String(c.userId);
+                
+                return (
+                  <div key={c.commentId || c.id} className="discussion-comment-item">
+                    <div className="discussion-comment-left">
+                      <div 
+                        className="discussion-comment-avatar"
+                        onClick={() => c.userId && handleProfileNavigate(navigate, c.userId)}
+                      >
+                        <ImageWithFallback
+                          src={c.profilePictureUrl ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${c.profilePictureUrl}` : null}
+                          alt={c.username || 'User'}
+                          fallbackType="avatar"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <span className="comment-author-name">{c.author}</span>
-                      <span className="comment-author-handle">{c.handle}</span>
+                    <div className="discussion-comment-right">
+                      <div className="discussion-comment-header-row">
+                        <span 
+                          className="discussion-comment-username"
+                          onClick={() => c.userId && handleProfileNavigate(navigate, c.userId)}
+                        >
+                          {c.username}
+                        </span>
+                        {isCommentOwner && (
+                          <button 
+                            onClick={() => handleDeleteComment(c.commentId || c.id)}
+                            className="discussion-comment-delete-btn"
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </div>
+                      <p className="discussion-comment-text">{c.content}</p>
                     </div>
-                    <span className="comment-time">{c.date}</span>
                   </div>
-                  <p className="comment-text">{c.text}</p>
-                </div>
-              ))
+                );
+              })
             ) : (
               <EmptyState
                 icon="MessageSquare"

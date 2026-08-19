@@ -6,67 +6,69 @@ import { SkeletonCard } from '../components/SkeletonLoader';
 import { fetchPublications } from '../services/publicationService';
 import { bookmarkApi } from '../api/bookmark';
 import { useAuth } from '../context/AuthContext';
+import { showToast } from '../lib/toast';
 import './Bookmarks.css';
 
 export default function Bookmarks() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
-
-  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
+  const [bookmarkedIds, setBookmarkedIds] = useState([]);
   const [allPapers, setAllPapers] = useState([]);
+  const [removingBookmarkIds, setRemovingBookmarkIds] = useState([]);
 
   useEffect(() => {
     setIsLoading(true);
-    fetchPublications()
-      .then((res) => {
-        setAllPapers(res.data || []);
-      })
-      .catch((err) => {
-        console.error('Failed to load publications in bookmarks:', err);
-      })
-      .finally(() => {
+    
+    const loadData = async () => {
+      try {
+        const pubPromise = fetchPublications();
+        const bookmarkPromise = isAuthenticated 
+          ? bookmarkApi.getBookmarks() 
+          : Promise.resolve([]);
+          
+        const [pubRes, bookmarkRes] = await Promise.all([pubPromise, bookmarkPromise]);
+        
+        setAllPapers(pubRes.data || []);
+        
+        const apiIds = Array.isArray(bookmarkRes) 
+          ? bookmarkRes 
+          : (bookmarkRes && Array.isArray(bookmarkRes.data) ? bookmarkRes.data : []);
+        setBookmarkedIds(apiIds.map(id => typeof id === 'object' ? (id.publicationId || id.id) : id));
+      } catch (err) {
+        console.error('Error loading data for Bookmarks page:', err);
+      } finally {
         setIsLoading(false);
-      });
-
-    if (isAuthenticated) {
-      bookmarkApi.getBookmarks()
-        .then((res) => {
-          if (res.data) {
-            const apiIds = res.data.map(b => b.publicationId || b.id);
-            setBookmarkedIds(prev => Array.from(new Set([...prev, ...apiIds])));
-          }
-        })
-        .catch(() => {});
-    }
+      }
+    };
+    
+    loadData();
   }, [isAuthenticated]);
 
   const bookmarkedPapers = allPapers.filter(paper => bookmarkedIds.includes(paper.id));
 
-  const handleToggleBookmark = (id) => {
-    setBookmarkedIds(prev => {
-      const isBookmarked = prev.includes(id);
-      const next = isBookmarked ? prev.filter(item => item !== id) : [...prev, id];
-      localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(next));
-
-      if (isAuthenticated) {
-        if (isBookmarked) {
-          bookmarkApi.removeBookmark(id).catch(() => {});
+  const handleToggleBookmark = async (id) => {
+    if (!isAuthenticated) return;
+    if (removingBookmarkIds.includes(id)) return; // Prevent double trigger during animation
+    try {
+      const res = await bookmarkApi.addBookmark(id);
+      if (res && typeof res.bookmarked === 'boolean') {
+        if (res.bookmarked) {
+          setBookmarkedIds(prev => prev.includes(id) ? prev : [...prev, id]);
         } else {
-          bookmarkApi.addBookmark(id).catch(() => {});
+          // Immediately trigger unbookmarked state in ResearchCard icon and add transition anim
+          setRemovingBookmarkIds(prev => [...prev, id]);
+          
+          setTimeout(() => {
+            setBookmarkedIds(prev => prev.filter(item => item !== id));
+            setRemovingBookmarkIds(prev => prev.filter(item => item !== id));
+          }, 400); // 400ms matches the Bookmarks.css exit animation duration
         }
       }
-
-      return next;
-    });
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+      showToast('Failed to update bookmark');
+    }
   };
 
 
@@ -89,20 +91,27 @@ export default function Bookmarks() {
           </div>
         ) : bookmarkedPapers.length > 0 ? (
           <div className="bookmarks-cards-grid">
-            {bookmarkedPapers.map((paper) => (
-              <ResearchCard
-                key={paper.id}
-                paper={paper}
-                isBookmarked={true}
-                onToggleBookmark={handleToggleBookmark}
-                onReadArticle={() => navigate(`/research/${paper.id}`)}
-              />
-            ))}
+            {bookmarkedPapers.map((paper) => {
+              const isRemoving = removingBookmarkIds.includes(paper.id);
+              return (
+                <div
+                  key={paper.id}
+                  className={isRemoving ? 'bookmark-card-removing-anim' : ''}
+                >
+                  <ResearchCard
+                    paper={paper}
+                    isBookmarked={!isRemoving}
+                    onToggleBookmark={handleToggleBookmark}
+                    onReadArticle={() => navigate(`/research/${paper.id}`)}
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <EmptyState
             icon="Bookmark"
-            title="No bookmarks yet"
+            title="No bookmarked publications yet."
             description="Save publications to read them later."
             actionText="Browse Publications"
             onAction={() => navigate('/explore')}
@@ -112,3 +121,4 @@ export default function Bookmarks() {
     </div>
   );
 }
+

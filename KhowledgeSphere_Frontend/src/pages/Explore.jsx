@@ -1,66 +1,295 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { X, Search } from 'lucide-react';
 import { CATEGORIES, PUBLICATION_TYPES, LANGUAGES } from '../data/researchData';
-import { fetchPublications } from '../services/publicationService';
+import { fetchPublications, searchPublications, searchGlobal } from '../services/publicationService';
+import { formatLabelToEnum } from '../lib/formatters';
 import ResearchCard from '../components/ResearchCard';
 import CustomDropdown from '../components/CustomDropdown';
 import { SkeletonExplore } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
+import ImageWithFallback from '../components/ImageWithFallback';
+import { useAuth } from '../context/AuthContext';
+import { bookmarkApi } from '../api/bookmark';
+import { showToast } from '../lib/toast';
+import { getScrollPosition, clearScrollPosition, getPageCache, savePageCache, getPreviousPath } from '../lib/profileNavigation';
 import './Explore.css';
 
 export default function Explore() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
-  // Load user published papers dynamically
-  const [allPapers, setAllPapers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Cache validation and restoration logic
+  const cached = getPageCache('explore');
+  const prev = getPreviousPath();
+  const isReturningFromProfile = prev.startsWith('/profile') || prev.startsWith('/user');
+  const hasValidCache = cached && Array.isArray(cached.allPapers) && cached.allPapers.length > 0;
+  const shouldRestore = isReturningFromProfile && hasValidCache;
 
-  useEffect(() => {
-    setIsLoading(true);
-    fetchPublications()
-      .then((res) => {
-        setAllPapers(res.data || []);
-      })
-      .catch((err) => {
-        console.error('Failed to load papers in search:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
-
+  const [defaultPapers, setDefaultPapers] = useState(shouldRestore ? (cached.defaultPapers || []) : []);
+  const [allPapers, setAllPapers] = useState(shouldRestore ? cached.allPapers : []);
+  const [isLoading, setIsLoading] = useState(shouldRestore ? cached.isLoading : true);
+  const [error, setError] = useState(shouldRestore ? (cached.error || null) : null);
 
   // Selected filters in local state
-  const [selectedField, setSelectedField] = useState('All Fields');
-  const [selectedYear, setSelectedYear] = useState('All Years');
-  const [selectedLanguage, setSelectedLanguage] = useState('All Languages');
-  const [selectedType, setSelectedType] = useState('All Types');
+  const [selectedField, setSelectedField] = useState(shouldRestore ? (cached.selectedField || 'All Fields') : 'All Fields');
+  const [selectedYear, setSelectedYear] = useState(shouldRestore ? (cached.selectedYear || 'All Years') : 'All Years');
+  const [selectedLanguage, setSelectedLanguage] = useState(shouldRestore ? (cached.selectedLanguage || 'All Languages') : 'All Languages');
+  const [selectedType, setSelectedType] = useState(shouldRestore ? (cached.selectedType || 'All Types') : 'All Types');
+
+  // Search API States
+  const searchQuery = searchParams.get('q') || '';
+  const [searchVal, setSearchVal] = useState(searchQuery);
+  const [searchedResearches, setSearchedResearches] = useState([]);
+  const [searchedUsers, setSearchedUsers] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Synchronize local input value with URL search query
+  useEffect(() => {
+    if (searchQuery !== searchVal) {
+      setSearchVal(searchQuery);
+    }
+  }, [searchQuery]);
+
+  // Debounced update of URL search params
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      const currentQ = searchParams.get('q') || '';
+      if (searchVal !== currentQ) {
+        const params = new URLSearchParams(searchParams);
+        if (searchVal.trim()) {
+          params.set('q', searchVal);
+        } else {
+          params.delete('q');
+        }
+        setSearchParams(params, { replace: true });
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchVal]);
+
+  const mapTypeToEnum = (typeLabel) => {
+    if (typeLabel === 'Research Paper') {
+      return 'RESEARCH';
+    }
+    return formatLabelToEnum(typeLabel);
+  };
+
+  const hasActiveDropdownFilters = 
+    selectedField !== 'All Fields' || 
+    selectedYear !== 'All Years' || 
+    selectedLanguage !== 'All Languages' || 
+    selectedType !== 'All Types';
+
+  // Synchronize state with cache
+  useEffect(() => {
+    if (defaultPapers && defaultPapers.length > 0) {
+      savePageCache('explore', {
+        allPapers,
+        defaultPapers,
+        isLoading,
+        error,
+        selectedField,
+        selectedYear,
+        selectedLanguage,
+        selectedType
+      });
+    }
+  }, [allPapers, defaultPapers, isLoading, error, selectedField, selectedYear, selectedLanguage, selectedType]);
+
+  useEffect(() => {
+    if (shouldRestore) {
+      return;
+    }
+
+    let active = true;
+
+    const loadData = async () => {
+      setError(null);
+
+      const isInitialLoad = defaultPapers.length === 0 && !hasActiveDropdownFilters && !searchQuery;
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsSearching(true);
+      }
+
+      if (searchQuery) {
+        try {
+          const res = await searchGlobal(searchQuery);
+          if (!active) return;
+          if (res.success) {
+            setSearchedResearches(res.data.researches || []);
+            setSearchedUsers(res.data.users || []);
+            setError(null);
+          } else {
+            setSearchedResearches([]);
+            setSearchedUsers([]);
+            setError(res.error || 'No results found');
+          }
+        } catch (err) {
+          if (!active) return;
+          setSearchedResearches([]);
+          setSearchedUsers([]);
+          setError('No results found');
+        } finally {
+          if (active) {
+            setIsSearching(false);
+            setIsLoading(false);
+          }
+        }
+      } else {
+        if (active) {
+          setSearchedResearches([]);
+          setSearchedUsers([]);
+        }
+
+        if (hasActiveDropdownFilters) {
+          // Build search parameters dynamically
+          const params = {};
+          if (selectedField !== 'All Fields') {
+            params.category = formatLabelToEnum(selectedField);
+          }
+          if (selectedYear !== 'All Years') {
+            params.year = selectedYear;
+          }
+          if (selectedLanguage !== 'All Languages') {
+            params.language = selectedLanguage;
+          }
+          if (selectedType !== 'All Types') {
+            params.publicationType = mapTypeToEnum(selectedType);
+          }
+
+          try {
+            const res = await searchPublications(params);
+            if (!active) return;
+            if (res.success) {
+              if (!res.data || res.data.length === 0) {
+                setAllPapers([]);
+                setError('no publications found 😥');
+              } else {
+                setAllPapers(res.data);
+                setError(null);
+              }
+            } else {
+              setAllPapers([]);
+              setError('no publications found 😥');
+            }
+          } catch (err) {
+            if (!active) return;
+            setAllPapers([]);
+            setError('no publications found 😥');
+          } finally {
+            if (active) {
+              setIsSearching(false);
+              setIsLoading(false);
+            }
+          }
+        } else {
+          // MODE 1 - No dropdown filters active
+          if (defaultPapers && defaultPapers.length > 0) {
+            if (active) {
+              setAllPapers(defaultPapers);
+              setIsSearching(false);
+              setIsLoading(false);
+            }
+          } else {
+            try {
+              const res = await fetchPublications();
+              if (!active) return;
+              if (res.success) {
+                const reversed = res.data ? [...res.data].reverse() : [];
+                setDefaultPapers(reversed);
+                setAllPapers(reversed);
+              } else {
+                setError(res.error || 'Failed to load publications');
+              }
+            } catch (err) {
+              if (!active) return;
+              setError(err.message || 'Failed to load publications');
+            } finally {
+              if (active) {
+                setIsSearching(false);
+                setIsLoading(false);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedField,
+    selectedYear,
+    selectedLanguage,
+    selectedType,
+    searchQuery,
+    shouldRestore
+  ]);
+
+  // Scroll Restoration
+  useLayoutEffect(() => {
+    if (!isLoading) {
+      const savedScroll = getScrollPosition('explore');
+      if (savedScroll > 0) {
+        window.scrollTo({
+          top: savedScroll,
+          behavior: 'instant'
+        });
+        clearScrollPosition('explore');
+      }
+    }
+  }, [isLoading]);
 
   // Bookmarking persistence
-  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+  const [bookmarkedIds, setBookmarkedIds] = useState([]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      bookmarkApi.getBookmarks()
+        .then((res) => {
+          const apiIds = Array.isArray(res) 
+            ? res 
+            : (res && Array.isArray(res.data) ? res.data : []);
+          setBookmarkedIds(apiIds.map(id => typeof id === 'object' ? (id.publicationId || id.id) : id));
+        })
+        .catch((err) => {
+          console.error("Failed to load bookmarks in Explore:", err);
+        });
+    } else {
+      setBookmarkedIds([]);
     }
-  });
+  }, [isAuthenticated]);
 
-  // Retrieve search query "q" from the global navigation
-  const searchQuery = searchParams.get('q') || '';
-
-  // Synchronize bookmark changes with localStorage
-  const handleToggleBookmark = (id) => {
-    setBookmarkedIds(prev => {
-      const next = prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id];
-      localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(next));
-      return next;
-    });
+  // Synchronize bookmark changes with backend
+  const handleToggleBookmark = async (id) => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await bookmarkApi.addBookmark(id);
+      if (res && typeof res.bookmarked === 'boolean') {
+        setBookmarkedIds(prev => {
+          if (res.bookmarked) {
+            return prev.includes(id) ? prev : [...prev, id];
+          } else {
+            return prev.filter(item => item !== id);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+      showToast('Failed to update bookmark');
+    }
   };
 
   const handleClearSearch = () => {
+    setSearchVal('');
     searchParams.delete('q');
     setSearchParams(searchParams);
   };
@@ -70,11 +299,12 @@ export default function Explore() {
     setSelectedYear('All Years');
     setSelectedLanguage('All Languages');
     setSelectedType('All Types');
+    setSearchVal('');
     setSearchParams({});
   };
 
-  // Dynamic Year List Extraction from combined paper datasets
-  const availableYears = Array.from(new Set(allPapers.map(p => p.year).filter(Boolean)))
+  // Dynamic Year List Extraction from default paper datasets
+  const availableYears = Array.from(new Set(defaultPapers.map(p => p.year).filter(Boolean)))
     .sort()
     .reverse();
   const yearsOptions = ['All Years', ...availableYears];
@@ -85,34 +315,27 @@ export default function Explore() {
   const typesOptions = ['All Types', ...PUBLICATION_TYPES];
 
   // Dynamic Filtering Logic
-  const filteredPapers = allPapers.filter(paper => {
-    // 1. Text Search Query matching case-insensitively across Title, Authors, and Abstract
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = paper.title.toLowerCase().includes(q);
-      const matchAuthors = paper.authors.toLowerCase().includes(q);
-      const matchAbstract = paper.abstract.toLowerCase().includes(q);
-      if (!matchTitle && !matchAuthors && !matchAbstract) {
-        return false;
-      }
-    }
+  const filteredPapers = allPapers;
 
-    // 2. Exact match filters
-    if (selectedField !== 'All Fields' && paper.field !== selectedField) {
+  // Filter searched researches by active dropdown parameters client-side
+  const filteredSearchedResearches = searchedResearches.filter(paper => {
+    if (selectedField !== 'All Fields' && paper.category !== selectedField) {
       return false;
     }
     if (selectedYear !== 'All Years' && paper.year !== selectedYear) {
       return false;
     }
-    if (selectedLanguage !== 'All Languages' && (paper.language || 'English') !== selectedLanguage) {
+    if (selectedLanguage !== 'All Languages' && paper.language !== selectedLanguage) {
       return false;
     }
     if (selectedType !== 'All Types' && paper.type !== selectedType) {
       return false;
     }
-
     return true;
   });
+
+  const displayedResearches = searchQuery ? filteredSearchedResearches : filteredPapers;
+  const displayedUsers = searchQuery ? searchedUsers : [];
 
   const isAnyFilterActive = 
     selectedField !== 'All Fields' || 
@@ -152,19 +375,10 @@ export default function Explore() {
               type="text"
               className="explore-search-input"
               placeholder="Search research papers, topics, authors..."
-              value={searchQuery}
-              onChange={(e) => {
-                const val = e.target.value;
-                const params = new URLSearchParams(searchParams);
-                if (val) {
-                  params.set('q', val);
-                } else {
-                  params.delete('q');
-                }
-                setSearchParams(params, { replace: true });
-              }}
+              value={searchVal}
+              onChange={(e) => setSearchVal(e.target.value)}
             />
-            {searchQuery && (
+            {searchVal && (
               <button 
                 type="button" 
                 className="explore-search-clear" 
@@ -236,31 +450,75 @@ export default function Explore() {
       <div>
         <div className="results-info-row">
           <div className="results-count">
-            {filteredPapers.length} {filteredPapers.length === 1 ? 'Research Paper' : 'Research Papers'} 
+            {displayedResearches.length} {displayedResearches.length === 1 ? 'Research Paper' : 'Research Papers'} 
             <span> found matches</span>
           </div>
         </div>
 
-        {filteredPapers.length > 0 ? (
-          <div className="results-grid" style={{ marginTop: '20px' }}>
-            {filteredPapers.map((paper) => {
-              const isBookmarked = bookmarkedIds.includes(paper.id);
-              return (
-                <ResearchCard
-                  key={paper.id}
-                  paper={paper}
-                  isBookmarked={isBookmarked}
-                  onToggleBookmark={handleToggleBookmark}
-                  onReadArticle={() => navigate(`/research/${paper.id}`)}
-                />
-              );
-            })}
+        {isSearching ? (
+          <div className="search-loading-container">
+            <div className="search-spinner"></div>
+            <span className="search-loading-text">Loading...</span>
+          </div>
+        ) : (displayedResearches.length > 0 || displayedUsers.length > 0) ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
+            
+            {/* Users Section */}
+            {displayedUsers.length > 0 && (
+              <div>
+                <h3 className="section-title">Users</h3>
+                <div className="users-grid">
+                  {displayedUsers.map((user) => (
+                    <div 
+                      key={user.userId || user.id} 
+                      className="user-search-card" 
+                      onClick={() => navigate(`/user/${user.userId || user.id}`)}
+                    >
+                      <div className="user-search-avatar">
+                        <ImageWithFallback 
+                          src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/${user.userId || user.id}/picture`}
+                          alt={user.name || user.username}
+                          fallbackType="avatar"
+                        />
+                      </div>
+                      <div className="user-search-info">
+                        <h4 className="user-search-name">{user.name}</h4>
+                        <span className="user-search-username">@{user.username}</span>
+                        <p className="user-search-profession">{user.profession || 'Researcher'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Research Section */}
+            {displayedResearches.length > 0 && (
+              <div>
+                {searchQuery && <h3 className="section-title">Research</h3>}
+                <div className="results-grid"> 
+                  {displayedResearches.map((paper) => {
+                    const isBookmarked = bookmarkedIds.includes(paper.id);
+                    return (
+                      <ResearchCard
+                        key={paper.id}
+                        paper={paper}
+                        isBookmarked={isBookmarked}
+                        onToggleBookmark={handleToggleBookmark}
+                        onReadArticle={() => navigate(`/research/${paper.id}`)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
           </div>
         ) : (
           <EmptyState
             icon="Search"
-            title="No results found"
-            description="Try changing your keywords or filters."
+            title={error || "No results found"}
+            description={error ? "Try changing your filters or keywords." : "Try changing your keywords or filters."}
             actionText="Clear Filters"
             onAction={handleClearAllFilters}
           />

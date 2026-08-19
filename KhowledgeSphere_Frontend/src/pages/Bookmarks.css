@@ -21,3 +21,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+.bookmark-card-removing-anim {
+  animation: fadeOutSlideDown 0.4s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes fadeOutSlideDown {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+}
+

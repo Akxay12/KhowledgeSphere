@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Menu, UserPlus, LogIn } from 'lucide-react';
 import logoImg from '../assets/images/KnowledgeSphere_logo.png';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import './Navbar.css';
 
 export default function Navbar({ onSearch, onToggleSidebar, isSidebarCollapsed }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = useState('');
   const { user: userProfile, isAuthenticated } = useAuth();
 
@@ -46,22 +47,37 @@ export default function Navbar({ onSearch, onToggleSidebar, isSidebarCollapsed }
         </div>
       </div>
 
-      <form onSubmit={handleSearchSubmit} className="nav-search-bar">
-        <Search size={18} className="text-light" />
-        <input
-          type="text"
-          className="nav-search-input"
-          placeholder="Search research, topics, authors..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </form>
+      {location.pathname === '/explore' && (
+        <form onSubmit={handleSearchSubmit} className="nav-search-bar">
+          <Search size={18} className="text-light" />
+          <input
+            type="text"
+            className="nav-search-input"
+            placeholder="Search research, topics, authors..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </form>
+      )}
 
       <div className="nav-actions">
         {isAuthenticated ? (
           <div className="nav-user-thumb" onClick={() => navigate('/profile')} title="View Profile">
             {userProfile?.avatarImage ? (
-              <img src={userProfile.avatarImage} alt={userProfile.name} className="nav-avatar-img" />
+              <>
+                <img 
+                  src={userProfile.avatarImage} 
+                  alt={userProfile.name} 
+                  className="nav-avatar-img" 
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    if (e.currentTarget.nextSibling) {
+                      e.currentTarget.nextSibling.style.display = 'flex';
+                    }
+                  }}
+                />
+                <span style={{ display: 'none', width: '100%', height: '100%', borderRadius: '50%', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{getInitials()}</span>
+              </>
             ) : (
               <span>{getInitials()}</span>
             )}

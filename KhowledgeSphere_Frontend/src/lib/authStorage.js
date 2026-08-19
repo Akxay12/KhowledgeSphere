@@ -8,7 +8,7 @@ const STORAGE_KEY_AUTH = 'knowledgesphere_auth_session';
  */
 export function getStoredUserProfile() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PROFILE);
+    const raw = localStorage.getItem('loggedInUser');
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (e) {
@@ -23,8 +23,13 @@ export function getStoredUserProfile() {
 export function getStoredAuthSession() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_AUTH);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (raw) return JSON.parse(raw);
+    const token = localStorage.getItem('token');
+    const user = getStoredUserProfile();
+    if (token && user) {
+      return { isAuthenticated: true, token, email: user.email };
+    }
+    return null;
   } catch (e) {
     console.error('Error reading auth session', e);
     return null;
@@ -33,11 +38,7 @@ export function getStoredAuthSession() {
 
 export function isUserAuthenticated() {
   try {
-    const session = getStoredAuthSession();
-    const profile = getStoredUserProfile();
-    if (session && session.isAuthenticated) return true;
-    if (profile && (profile.email || profile.username)) return true;
-    return false;
+    return !!localStorage.getItem('token');
   } catch (e) {
     return false;
   }
@@ -68,31 +69,70 @@ export function saveUserProfile(profileData) {
   try {
     const existing = getStoredUserProfile() || {};
 
-    const updated = {
-      ...existing,
-      ...profileData,
-      // Formatting
-      name: profileData.fullName || profileData.name || existing.name || 'Scholar',
-      email: profileData.email || existing.email || '',
-      avatarImage: profileData.picture || profileData.avatarImage || existing.avatarImage || '',
-      handle: profileData.username ? (profileData.username.startsWith('@') ? profileData.username : `@${profileData.username}`) : (existing.handle || '@scholar'),
-      username: profileData.username || existing.username || '',
-      googleId: profileData.googleId || existing.googleId || '',
-      idToken: profileData.idToken || existing.idToken || null,
-      accessToken: profileData.accessToken || existing.accessToken || null,
-      onboardingCompleted: true,
-      lastLoginAt: new Date().toISOString()
-    };
+    let updated;
+    if (profileData && (profileData.userId !== undefined || profileData.token !== undefined)) {
+      // Use only the fields returned by the backend
+      updated = {
+        userId: profileData.userId !== undefined ? profileData.userId : existing.userId,
+        name: profileData.name || existing.name || '',
+        username: profileData.username || existing.username || '',
+        email: profileData.email || existing.email || '',
+        bio: profileData.bio || existing.bio || '',
+        profession: profileData.profession || existing.profession || '',
+        location: profileData.location || existing.location || '',
+        linkedinUrl: profileData.linkedinUrl || existing.linkedinUrl || '',
+        joined: profileData.joined || existing.joined || '',
+        token: profileData.token || existing.token || null,
+        onboardingCompleted: true,
+        lastLoginAt: new Date().toISOString(),
+        publicationCount: profileData.publicationCount !== undefined ? profileData.publicationCount : existing.publicationCount,
+        followersCount: profileData.followersCount !== undefined ? profileData.followersCount : existing.followersCount,
+        followerCount: profileData.followerCount !== undefined ? profileData.followerCount : existing.followerCount
+      };
 
-    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(updated));
-    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({
-      isAuthenticated: true,
-      email: updated.email,
-      googleId: updated.googleId,
-      idToken: updated.idToken,
-      accessToken: updated.accessToken,
-      loginAt: updated.lastLoginAt
-    }));
+      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(updated));
+      localStorage.setItem('loggedInUser', JSON.stringify(updated));
+      if (updated.token) {
+        localStorage.setItem('token', updated.token);
+      }
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({
+        isAuthenticated: true,
+        email: updated.email,
+        token: updated.token,
+        loginAt: updated.lastLoginAt
+      }));
+    } else {
+      updated = {
+        ...existing,
+        ...profileData,
+        // Formatting
+        name: profileData.fullName || profileData.name || existing.name || 'Scholar',
+        email: profileData.email || existing.email || '',
+        avatarImage: profileData.picture || profileData.avatarImage || existing.avatarImage || '',
+        handle: profileData.username ? (profileData.username.startsWith('@') ? profileData.username : `@${profileData.username}`) : (existing.handle || '@scholar'),
+        username: profileData.username || existing.username || '',
+        googleId: profileData.googleId || existing.googleId || '',
+        idToken: profileData.idToken || existing.idToken || null,
+        accessToken: profileData.accessToken || existing.accessToken || null,
+        onboardingCompleted: true,
+        lastLoginAt: new Date().toISOString()
+      };
+
+      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(updated));
+      localStorage.setItem('loggedInUser', JSON.stringify(updated));
+      const token = updated.token || updated.accessToken || updated.idToken;
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({
+        isAuthenticated: true,
+        email: updated.email,
+        googleId: updated.googleId,
+        idToken: updated.idToken,
+        accessToken: updated.accessToken,
+        loginAt: updated.lastLoginAt
+      }));
+    }
 
     return updated;
   } catch (e) {

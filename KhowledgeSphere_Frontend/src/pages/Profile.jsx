@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { showToast } from '../lib/toast';
+import { bookmarkApi } from '../api/bookmark';
 import {
   Edit,
   Pencil,
@@ -15,11 +18,16 @@ import {
   ExternalLink,
   Trash2,
   X,
-  LogIn
+  LogIn,
+  Loader2,
+  AlertCircle,
+  ArrowLeft
 } from 'lucide-react';
 import { getPapers, deletePaper } from '../lib/storage';
-import { fetchPublications } from '../services/publicationService';
+import { fetchPublications, fetchPublicationsByUser, fetchMyPublications, removePublication } from '../services/publicationService';
+import { updateUserProfileApi, uploadProfilePictureApi, getUserByIdApi } from '../api/user';
 import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
 
 import ResearchCard from '../components/ResearchCard';
 import { SkeletonProfile } from '../components/SkeletonLoader';
@@ -35,205 +43,569 @@ const DEFAULT_PROFILE = {
   bio: 'Specializing in Neural-Symbolic Reasoning, Cognitive Architectures, and High-Performance Distributed Systems. Author & Open-Source Contributor passionate about accessible research.',
   location: 'San Francisco, CA, USA',
   linkedin: 'https://linkedin.com/in/akshay-verma',
-  joinDate: 'March 2026',
+  joinDate: '',
   avatarImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
-  coverBanner: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1600&auto=format&fit=crop',
+};
+
+const formatJoinDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      }
+    }
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  } catch (e) {}
+  return dateStr;
 };
 
 export default function Profile() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+  const userId = params.userId || params.id;
   const fileInputRef = useRef(null);
-  const coverFileInputRef = useRef(null);
+  const { user: authUser, fetchProfileImages, fetchProfilePicture, updateProfile, followingIds, toggleFollow, likedPublicationIds } = useAuth();
+
+  // Determine the logged-in user details dynamically
+  const loggedInUserRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+  let loggedInUserId = null;
+  if (loggedInUserRaw) {
+    try {
+      const parsed = JSON.parse(loggedInUserRaw);
+      loggedInUserId = parsed.userId || parsed.id;
+    } catch (e) {
+      console.error('Error parsing logged-in user:', e);
+    }
+  }
+
+  const clickedUserId = userId ? parseInt(userId, 10) : null;
+  const currentUserId = loggedInUserId ? parseInt(loggedInUserId, 10) : null;
 
   // Determine if viewing own profile vs visitor view
-  const [isOwnProfile] = useState(() => !window.location.search.includes('visitor'));
+  const isOwnProfile = !userId || clickedUserId === currentUserId;
 
   // Determine if user is authenticated vs guest
-  const isAuthenticated = (() => {
-    try {
-      const authSession = localStorage.getItem('knowledgesphere_auth_session');
-      const userProfile = localStorage.getItem('knowledgesphere_user_profile');
-      if (authSession) {
-        const parsed = JSON.parse(authSession);
-        if (parsed.isAuthenticated) return true;
-      }
-      if (userProfile) {
-        const parsed = JSON.parse(userProfile);
-        if (parsed.email || parsed.username) return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  })();
+  const isLoggedIn = !!localStorage.getItem("loggedInUser");
+  const isAuthenticated = isLoggedIn;
+  const showGuestBlock = !isLoggedIn && !userId;
 
-  // Tab State: ONLY 'published' and 'liked'
-  const [activeTab, setActiveTab] = useState('published');
+
 
   // Follower State
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followerCount, setFollowerCount] = useState(1240);
+  const isFollowing = clickedUserId && followingIds ? followingIds.has(clickedUserId) : false;
+  const [followerCount, setFollowerCount] = useState(() => {
+    try {
+      const savedRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        if (parsed.followersCount !== undefined) return parsed.followersCount;
+        if (parsed.followerCount !== undefined) return parsed.followerCount;
+      }
+    } catch (e) {
+      console.error('Error parsing logged-in user for initial follower count:', e);
+    }
+    return 0;
+  });
+
+  // Reset scroll position to top when component mounts or target userId changes
+  useLayoutEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'instant'
+    });
+  }, [userId]);
 
   // Profile Data State with LocalStorage persistence
   const [profile, setProfile] = useState(() => {
+    const initialOwnProfile = !userId || (userId && parseInt(userId, 10) === parseInt(loggedInUserId, 10));
+    if (!initialOwnProfile) {
+      return null;
+    }
     try {
-      const saved = localStorage.getItem('knowledgesphere_user_profile');
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+      const savedRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        // Normalize fields from the backend User object to the frontend expectations
+        return {
+          ...parsed,
+          name: parsed.name || parsed.fullName || DEFAULT_PROFILE.name,
+          username: parsed.username || DEFAULT_PROFILE.handle.replace('@', ''),
+          handle: parsed.handle || (parsed.username ? (parsed.username.startsWith('@') ? parsed.username : `@${parsed.username}`) : DEFAULT_PROFILE.handle),
+          email: parsed.email || '',
+          bio: parsed.bio || '',
+          profession: parsed.profession || parsed.title || '',
+          title: parsed.profession || parsed.title || DEFAULT_PROFILE.title,
+          location: parsed.location || '',
+          linkedinUrl: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+          linkedin: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+          joined: parsed.joined || parsed.joinDate || '',
+          joinDate: formatJoinDate(parsed.joined || parsed.joinDate),
+          profilePic: parsed.avatarImage || '',
+          avatarImage: parsed.avatarImage || DEFAULT_PROFILE.avatarImage
+        };
+      }
+      return DEFAULT_PROFILE;
     } catch {
       return DEFAULT_PROFILE;
     }
   });
 
   // Published Papers State
-  const [publishedPapers, setPublishedPapers] = useState([]);
+  const [publications, setPublications] = useState([]);
 
   // Bookmarked Paper IDs
-  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('knowledgesphere_bookmarks');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [bookmarkedIds, setBookmarkedIds] = useState([]);
 
-  // Liked Papers IDs State
-  const [likedIds, setLikedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('knowledgesphere_liked_papers');
-      return saved ? JSON.parse(saved) : ['paper-1', 'paper-2'];
-    } catch {
-      return ['paper-1', 'paper-2'];
+  useEffect(() => {
+    if (isLoggedIn) {
+      bookmarkApi.getBookmarks()
+        .then((res) => {
+          const apiIds = Array.isArray(res) 
+            ? res 
+            : (res && Array.isArray(res.data) ? res.data : []);
+          setBookmarkedIds(apiIds.map(id => typeof id === 'object' ? (id.publicationId || id.id) : id));
+        })
+        .catch((err) => {
+          console.error("Failed to load bookmarks in profile:", err);
+        });
+    } else {
+      setBookmarkedIds([]);
     }
-  });
+  }, [isLoggedIn]);
+
+  // Liked Papers IDs derived from global auth state
+  const likedIds = likedPublicationIds ? Array.from(likedPublicationIds) : [];
 
   // Modals & Toast Notifications
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editFormData, setEditFormData] = useState({ ...profile });
+  const [editFormData, setEditFormData] = useState(() => profile ? { ...profile } : {});
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [paperToDelete, setPaperToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingCardIds, setDeletingCardIds] = useState([]);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authActionText, setAuthActionText] = useState('');
 
   const [toastMessage, setToastMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [editError, setEditError] = useState('');
 
-  // Load published papers on mount
-  useEffect(() => {
+  const [avatarVersion, setAvatarVersion] = useState(Date.now());
+  const [avatarError, setAvatarError] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Reset profile state and publications when transitioning between users to avoid stale data leakage
+  const [prevUserId, setPrevUserId] = useState(userId);
+  if (userId !== prevUserId) {
+    setPrevUserId(userId);
     setIsLoading(true);
-    fetchPublications()
-      .then((res) => {
-        setPublishedPapers(res.data || []);
-      })
-      .catch((err) => {
-        console.error('Failed to load published papers:', err);
-        setPublishedPapers([]);
-      })
-      .finally(() => {
-        setIsLoading(false);
+    setPublications([]);
+    setError(null);
+    
+    // If own profile, restore from localStorage (already initialised, but sync just in case)
+    const nextOwnProfile = !userId || parseInt(userId, 10) === parseInt(loggedInUserId, 10);
+    if (nextOwnProfile) {
+      try {
+        const savedRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+        if (savedRaw) {
+          const parsed = JSON.parse(savedRaw);
+          setProfile({
+            ...parsed,
+            name: parsed.name || parsed.fullName || DEFAULT_PROFILE.name,
+            username: parsed.username || DEFAULT_PROFILE.handle.replace('@', ''),
+            handle: parsed.handle || (parsed.username ? (parsed.username.startsWith('@') ? parsed.username : `@${parsed.username}`) : DEFAULT_PROFILE.handle),
+            email: parsed.email || '',
+            bio: parsed.bio || '',
+            profession: parsed.profession || parsed.title || '',
+            title: parsed.profession || parsed.title || DEFAULT_PROFILE.title,
+            location: parsed.location || '',
+            linkedinUrl: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+            linkedin: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+            joined: parsed.joined || parsed.joinDate || '',
+            joinDate: formatJoinDate(parsed.joined || parsed.joinDate),
+            profilePic: parsed.avatarImage || '',
+            avatarImage: parsed.avatarImage || DEFAULT_PROFILE.avatarImage
+          });
+          const initialFollowers = parsed.followersCount !== undefined 
+            ? parsed.followersCount 
+            : (parsed.followerCount !== undefined ? parsed.followerCount : 0);
+          setFollowerCount(initialFollowers);
+        } else {
+          setProfile(DEFAULT_PROFILE);
+          setFollowerCount(0);
+        }
+      } catch {
+        setProfile(DEFAULT_PROFILE);
+        setFollowerCount(0);
+      }
+    } else {
+      setProfile(null);
+      setFollowerCount(0);
+    }
+  }
+
+  const renderBackButton = () => {
+    if (isOwnProfile) return null;
+
+    const fromContext = location.state?.from || '';
+    let backText = 'Back to Feed';
+    let backPath = '/home';
+
+    if (fromContext.startsWith('/explore')) {
+      backText = 'Back to Search';
+      backPath = fromContext; // Go back to search query/filters
+    } else if (fromContext.startsWith('/research') || fromContext.startsWith('/publications')) {
+      backText = 'Back to Research';
+      backPath = -1;
+    }
+
+    return (
+      <div className="reader-top-controls" style={{ marginBottom: '16px', maxWidth: 'none', padding: '0 8px' }}>
+        <button 
+          className="reader-back-btn" 
+          onClick={() => {
+            if (backPath === -1) {
+              navigate(-1);
+            } else {
+              navigate(backPath);
+            }
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <ArrowLeft size={16} />
+          <span>{backText}</span>
+        </button>
+      </div>
+    );
+  };
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+  const profileUserId = profile?.userId || profile?.id;
+  const backendAvatarUrl = profileUserId ? `${API_BASE_URL}/public/${profileUserId}/picture?t=${avatarVersion}` : null;
+
+  const currentAvatarSrc = (!avatarError && backendAvatarUrl) ? backendAvatarUrl : (profile?.avatarImage || DEFAULT_PROFILE.avatarImage);
+
+  // Sync profile state with authUser updates (e.g. dynamic blob URLs fetched by AuthContext)
+  useEffect(() => {
+    if (isOwnProfile && authUser) {
+      setProfile(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          ...authUser,
+          avatarImage: authUser.avatarImage || prev.avatarImage || DEFAULT_PROFILE.avatarImage
+        };
       });
-  }, []);
+    }
+  }, [authUser, isOwnProfile]);
+
+  // Fetch images whenever the profile page opens
+  useEffect(() => {
+    if (isAuthenticated && profileUserId && fetchProfileImages) {
+      fetchProfileImages(profileUserId);
+    }
+  }, [profileUserId, isAuthenticated]);
+
+  useEffect(() => {
+    setAvatarError(false);
+    setAvatarVersion(Date.now());
+  }, [profileUserId]);
+
+  // Load profile data and publications dynamically when userId or loggedInUserId changes
+  useEffect(() => {
+    let active = true;
+    const loadProfileAndPublications = async () => {
+      setIsLoading(true);
+      
+      const targetUserId = userId || loggedInUserId;
+      if (!targetUserId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // 1. Fetch user profile if viewing another user's profile
+        if (!isOwnProfile) {
+          const fetchedUser = await getUserByIdApi(targetUserId);
+          if (fetchedUser && active) {
+            const normalizedJoinDate = formatJoinDate(fetchedUser.joined || fetchedUser.joinDate);
+            setProfile({
+              ...fetchedUser,
+              name: fetchedUser.name || fetchedUser.fullName || DEFAULT_PROFILE.name,
+              username: fetchedUser.username || DEFAULT_PROFILE.handle.replace('@', ''),
+              handle: fetchedUser.handle || (fetchedUser.username ? (fetchedUser.username.startsWith('@') ? fetchedUser.username : `@${fetchedUser.username}`) : DEFAULT_PROFILE.handle),
+              email: fetchedUser.email || '',
+              bio: fetchedUser.bio || '',
+              profession: fetchedUser.profession || fetchedUser.title || '',
+              title: fetchedUser.profession || fetchedUser.title || DEFAULT_PROFILE.title,
+              location: fetchedUser.location || '',
+              linkedinUrl: fetchedUser.linkedinUrl || fetchedUser.linkdinUrl || fetchedUser.linkedin || '',
+              linkedin: fetchedUser.linkedinUrl || fetchedUser.linkdinUrl || fetchedUser.linkedin || '',
+              joined: fetchedUser.joined || fetchedUser.joinDate || '',
+              joinDate: normalizedJoinDate,
+              profilePic: fetchedUser.avatarImage || '',
+              avatarImage: fetchedUser.avatarImage || DEFAULT_PROFILE.avatarImage
+            });
+
+            // Set follower count safely
+            const initialFollowers = fetchedUser.followersCount !== undefined 
+              ? fetchedUser.followersCount 
+              : (fetchedUser.followerCount !== undefined ? fetchedUser.followerCount : 0);
+            setFollowerCount(initialFollowers);
+
+            // Map and normalize publications directly from the public profile response
+            const normalizedPubs = (fetchedUser.publications || []).map(pub => ({
+              ...pub,
+              id: pub.publicationId || pub.id,
+              authors: pub.authorName || pub.authors || fetchedUser.name,
+              coverImage: pub.coverImageUrl || pub.coverImage,
+              type: pub.publicationType || pub.type,
+              publishedDate: pub.publishedAt || pub.publishedDate,
+              year: pub.publishedAt ? new Date(pub.publishedAt).getFullYear() : (pub.year || '2026')
+            }));
+            setPublications(normalizedPubs);
+          }
+        } else {
+          // If own profile, restore from localStorage (already initialised, but sync just in case)
+          const savedRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+          if (savedRaw && active) {
+            const parsed = JSON.parse(savedRaw);
+            setProfile({
+              ...parsed,
+              name: parsed.name || parsed.fullName || DEFAULT_PROFILE.name,
+              username: parsed.username || DEFAULT_PROFILE.handle.replace('@', ''),
+              handle: parsed.handle || (parsed.username ? (parsed.username.startsWith('@') ? parsed.username : `@${parsed.username}`) : DEFAULT_PROFILE.handle),
+              email: parsed.email || '',
+              bio: parsed.bio || '',
+              profession: parsed.profession || parsed.title || '',
+              title: parsed.profession || parsed.title || DEFAULT_PROFILE.title,
+              location: parsed.location || '',
+              linkedinUrl: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+              linkedin: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+              joined: parsed.joined || parsed.joinDate || '',
+              joinDate: formatJoinDate(parsed.joined || parsed.joinDate),
+              profilePic: parsed.avatarImage || '',
+              avatarImage: parsed.avatarImage || DEFAULT_PROFILE.avatarImage
+            });
+
+            // Set follower count safely
+            const initialFollowers = parsed.followersCount !== undefined 
+              ? parsed.followersCount 
+              : (parsed.followerCount !== undefined ? parsed.followerCount : 0);
+            setFollowerCount(initialFollowers);
+          }
+        }
+
+        // 2. Fetch publications dynamically (own publications only, public publications are already loaded above)
+        if (isOwnProfile) {
+          const res = await fetchMyPublications();
+          if (active) {
+            setPublications(res.data || []);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load profile/publications data:', err);
+        if (active) {
+          setError(err.message || 'Failed to load profile');
+          setPublications([]);
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadProfileAndPublications();
+
+    return () => {
+      active = false;
+    };
+  }, [userId, loggedInUserId]);
 
 
   // Handle Local File Upload for Avatar Photo
-  const handleAvatarUpload = (e) => {
+  const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (dataUrl) {
-        const updated = { ...profile, avatarImage: dataUrl };
-        setProfile(updated);
-        try {
-          localStorage.setItem('knowledgesphere_user_profile', JSON.stringify(updated));
-        } catch (err) {
-          console.error(err);
-        }
-        showToast('Profile picture updated successfully!');
-      }
-    };
-    reader.readAsDataURL(file);
-  };
 
-  // Handle Local File Upload for Cover Banner Photo
-  const handleCoverUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('Please select a valid image file.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (dataUrl) {
-        const updated = { ...profile, coverBanner: dataUrl };
-        setProfile(updated);
-        try {
-          localStorage.setItem('knowledgesphere_user_profile', JSON.stringify(updated));
-        } catch (err) {
-          console.error(err);
-        }
-        showToast('Cover photo updated successfully!');
+    setIsUploadingAvatar(true);
+
+    try {
+      const loggedInUserRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+      if (!loggedInUserRaw) {
+        throw new Error('No logged-in user found.');
       }
-    };
-    reader.readAsDataURL(file);
+      const loggedInUser = JSON.parse(loggedInUserRaw);
+      const userId = loggedInUser.userId || loggedInUser.id;
+      if (!userId) {
+        throw new Error('User ID is missing from logged-in session.');
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await uploadProfilePictureApi(formData);
+
+      // Fetch the latest profile picture immediately to update UI components
+      if (fetchProfilePicture && profileUserId) {
+        await fetchProfilePicture(profileUserId);
+      }
+
+      // Reset error state and increment version to trigger direct backend fetch
+      setAvatarError(false);
+      setAvatarVersion(Date.now());
+      showToast('Profile picture updated successfully!');
+    } catch (err) {
+      console.error('Failed to upload profile picture:', err);
+      showToast(err.message || 'Failed to upload profile picture.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   // Save profile edits
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    let formattedHandle = editFormData.handle ? editFormData.handle.trim() : '';
-    if (formattedHandle && !formattedHandle.startsWith('@')) {
-      formattedHandle = '@' + formattedHandle;
-    }
-    const updatedData = { ...editFormData, handle: formattedHandle };
-    setProfile(updatedData);
+    if (isSaving) return;
+
+    setIsSaving(true);
+    setEditError('');
+
     try {
-      localStorage.setItem('knowledgesphere_user_profile', JSON.stringify(updatedData));
+      // 1. Get logged-in user's ID from local storage
+      const loggedInUserRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+      if (!loggedInUserRaw) {
+        throw new Error('No logged-in user found.');
+      }
+      const loggedInUser = JSON.parse(loggedInUserRaw);
+      const userId = loggedInUser.userId || loggedInUser.id;
+      if (!userId) {
+        throw new Error('User ID is missing from logged-in session.');
+      }
+
+      // 2. Prepare request payload containing ONLY name, profession, bio, location, linkedinUrl
+      const requestPayload = {
+        name: editFormData.name || '',
+        profession: editFormData.title || editFormData.profession || '',
+        bio: editFormData.bio || '',
+        location: editFormData.location || '',
+        linkedinUrl: editFormData.linkedin || editFormData.linkedinUrl || ''
+      };
+
+      // 3. Send PUT request to the backend Update Profile API
+      const updatedUser = await updateUserProfileApi(requestPayload);
+
+      // 4. Successful Response:
+      // Replace the existing loggedInUser in localStorage with the updated user returned by the backend
+      const mergedUser = {
+        ...loggedInUser,
+        ...updatedUser
+      };
+
+      // Update localStorage instantly
+      localStorage.setItem('loggedInUser', JSON.stringify(mergedUser));
+      
+      if (updateProfile) {
+        updateProfile(mergedUser);
+      }
+
+      // Helper function to normalize parsed storage user details to component view format
+      const normalizeProfile = (parsed) => {
+        return {
+          ...parsed,
+          name: parsed.name || parsed.fullName || DEFAULT_PROFILE.name,
+          username: parsed.username || DEFAULT_PROFILE.handle.replace('@', ''),
+          handle: parsed.handle || (parsed.username ? (parsed.username.startsWith('@') ? parsed.username : `@${parsed.username}`) : DEFAULT_PROFILE.handle),
+          email: parsed.email || '',
+          bio: parsed.bio || '',
+          profession: parsed.profession || parsed.title || '',
+          title: parsed.profession || parsed.title || DEFAULT_PROFILE.title,
+          location: parsed.location || '',
+          linkedinUrl: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+          linkedin: parsed.linkedinUrl || parsed.linkdinUrl || parsed.linkedin || '',
+          joined: parsed.joined || parsed.joinDate || '',
+          joinDate: formatJoinDate(parsed.joined || parsed.joinDate),
+          profilePic: parsed.avatarImage || '',
+          avatarImage: parsed.avatarImage || DEFAULT_PROFILE.avatarImage
+        };
+      };
+
+      // Refresh the Profile page state using the updated localStorage data, preserving the current avatar image
+      setProfile(prev => ({
+        ...normalizeProfile(mergedUser),
+        avatarImage: prev.avatarImage || authUser?.avatarImage || DEFAULT_PROFILE.avatarImage
+      }));
+
+      // Close the Edit Profile dialog
+      setShowEditModal(false);
+      showToast('Profile updated successfully!');
     } catch (err) {
-      console.error(err);
+      console.error('Failed to update profile:', err);
+      // Display the backend error message
+      setEditError(err.message || 'An error occurred while updating profile.');
+    } finally {
+      setIsSaving(false);
     }
-    setShowEditModal(false);
-    showToast('Profile updated successfully!');
   };
 
   // Toggle Bookmark handler
-  const handleToggleBookmark = (id) => {
-    const next = bookmarkedIds.includes(id)
-      ? bookmarkedIds.filter(x => x !== id)
-      : [...bookmarkedIds, id];
-    setBookmarkedIds(next);
-    localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(next));
+  const handleToggleBookmark = async (id) => {
+    if (!isLoggedIn) return;
+    try {
+      const res = await bookmarkApi.addBookmark(id);
+      if (res && typeof res.bookmarked === 'boolean') {
+        setBookmarkedIds(prev => {
+          if (res.bookmarked) {
+            return prev.includes(id) ? prev : [...prev, id];
+          } else {
+            return prev.filter(item => item !== id);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+      showToast('Failed to update bookmark');
+    }
   };
 
   // Toggle Like handler
-  const handleToggleLike = (id) => {
-    const next = likedIds.includes(id)
-      ? likedIds.filter(x => x !== id)
-      : [...likedIds, id];
-    setLikedIds(next);
-    localStorage.setItem('knowledgesphere_liked_papers', JSON.stringify(next));
-    showToast(next.includes(id) ? 'Added to Liked publications' : 'Removed from Liked publications');
+  const handleToggleLike = (id, res) => {
+    const isLikedNow = res ? res.liked : (likedPublicationIds && likedPublicationIds.has(id));
+    showToast(isLikedNow ? 'Added to Liked publications' : 'Removed from Liked publications');
   };
 
   // Follow Button toggle
-  const handleToggleFollow = () => {
-    if (isFollowing) {
-      setIsFollowing(false);
-      setFollowerCount(prev => prev - 1);
-      showToast('Unfollowed ' + profile.name);
-    } else {
-      setIsFollowing(true);
-      setFollowerCount(prev => prev + 1);
-      showToast('You are now following ' + profile.name);
+  const handleToggleFollow = async () => {
+    if (!clickedUserId) return;
+    try {
+      const response = await toggleFollow(clickedUserId);
+      const isNowFollowing = response?.following;
+      if (isNowFollowing) {
+        setFollowerCount(prev => prev + 1);
+        showToast('You are now following ' + (profile?.name || 'user'));
+      } else {
+        setFollowerCount(prev => prev - 1);
+        showToast('Unfollowed ' + (profile?.name || 'user'));
+      }
+    } catch (err) {
+      console.error("Failed to toggle follow:", err);
+      showToast(err?.message || "Failed to update follow status");
     }
   };
 
@@ -253,55 +625,120 @@ export default function Profile() {
 
   // Handle Delete Publication clicks
   const handleDeleteClick = (id) => {
-    const paper = publishedPapers.find(p => p.id === id);
+    const paper = publications.find(p => p.id === id);
     if (!paper) return;
     setPaperToDelete(paper);
     setShowDeleteModal(true);
   };
 
   // Confirm Delete Paper
-  const handleConfirmDelete = () => {
-    if (!paperToDelete) return;
+  const handleConfirmDelete = async () => {
+    if (!paperToDelete || isDeleting) return;
     const paperId = paperToDelete.id;
-    setShowDeleteModal(false);
 
-    if (paperId.startsWith('custom-paper-')) {
-      deletePaper(paperId).catch(console.error);
-    }
-    setPublishedPapers(prev => prev.filter(p => p.id !== paperId));
-    
-    if (bookmarkedIds.includes(paperId)) {
-      const nextBookmarks = bookmarkedIds.filter(x => x !== paperId);
-      setBookmarkedIds(nextBookmarks);
-      localStorage.setItem('knowledgesphere_bookmarks', JSON.stringify(nextBookmarks));
+    // Get logged-in user's ID from local storage
+    const loggedInUserRaw = localStorage.getItem('loggedInUser') || localStorage.getItem('knowledgesphere_user_profile');
+    let currentUserId = null;
+    if (loggedInUserRaw) {
+      try {
+        const parsed = JSON.parse(loggedInUserRaw);
+        currentUserId = parsed.userId || parsed.id;
+      } catch (e) {
+        console.error('Error parsing logged-in user for deletion:', e);
+      }
     }
 
-    showToast('Publication deleted successfully.');
-    setPaperToDelete(null);
+    if (!currentUserId) {
+      showToast('Failed to delete research');
+      setShowDeleteModal(false);
+      setPaperToDelete(null);
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const res = await removePublication(paperId);
+      if (res && res.success) {
+        // Update local publicationCount
+        let userObj = authUser;
+        if (!userObj && loggedInUserRaw) {
+          try {
+            userObj = JSON.parse(loggedInUserRaw);
+          } catch (e) {
+            console.error('Error parsing user object on deletion count update:', e);
+          }
+        }
+        if (userObj) {
+          const currentCount = userObj.publicationCount || 0;
+          const newCount = Math.max(0, currentCount - 1);
+          const updatedUser = {
+            ...userObj,
+            publicationCount: newCount
+          };
+          localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+          localStorage.setItem('knowledgesphere_user_profile', JSON.stringify(updatedUser));
+          if (updateProfile) {
+            updateProfile(updatedUser);
+          }
+          // Update local profile state
+          setProfile(prev => prev ? { ...prev, publicationCount: newCount } : null);
+        }
+
+        // Success -> Close modal, reset delete loading state, reset target paper
+        setShowDeleteModal(false);
+        setIsDeleting(false);
+        setPaperToDelete(null);
+
+        // Optimistic / animated deletion: add to animating list
+        setDeletingCardIds(prev => [...prev, paperId]);
+
+        // Wait 500ms for animation to finish, then remove from state
+        setTimeout(() => {
+          setPublications(prev => prev.filter(p => p.id !== paperId));
+          setDeletingCardIds(prev => prev.filter(id => id !== paperId));
+        }, 500);
+
+        if (paperId.startsWith('custom-paper-')) {
+          deletePaper(paperId).catch(console.error);
+        }
+
+        if (bookmarkedIds.includes(paperId)) {
+          setBookmarkedIds(prev => prev.filter(x => x !== paperId));
+        }
+
+        showToast('Research deleted successfully');
+      } else {
+        throw new Error(res?.error || 'Failed to delete');
+      }
+    } catch (err) {
+      console.error('Delete publication error:', err);
+      showToast('Failed to delete research');
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setPaperToDelete(null);
+    }
   };
 
-  // Filter Liked Papers
-  const likedPapers = publishedPapers.filter(p => likedIds.includes(p.id));
 
-  // Navigation tabs configuration
-  const TABS = isAuthenticated 
-    ? [
-        { id: 'published', label: 'Published', count: publishedPapers.length },
-        { id: 'liked', label: 'Liked', count: likedPapers.length },
-        { id: 'followers', label: 'Followers', count: 0 },
-      ]
-    : [
-        { id: 'published', label: 'Published Publications', count: publishedPapers.length },
-      ];
 
   return (
     <div className="profile-wrapper">
+      {renderBackButton()}
       {isLoading ? (
         <SkeletonProfile />
+      ) : error ? (
+        <div style={{ padding: '60px 20px', display: 'flex', justifyContent: 'center' }}>
+          <ErrorState
+            title="Failed to Load Profile"
+            message={error}
+            onRetry={() => loadProfileAndPublications()}
+          />
+        </div>
       ) : (
         <>
           {/* Guest Mode Centered Alert Card OR Full Profile */}
-          {!isAuthenticated ? (
+          {showGuestBlock ? (
             <div style={{
               backgroundColor: 'var(--bg-card, #ffffff)',
               border: '1px solid var(--color-border, #e2e8f0)',
@@ -382,63 +819,43 @@ export default function Profile() {
             <>
               {/* HERO SECTION */}
               <div className="profile-hero-card">
-        {/* Cover / Banner Image */}
-        <div className="profile-banner-container">
-          <img 
-            src={profile.coverBanner} 
-            alt="Cover Banner" 
-            className="profile-banner-img"
-          />
-          <div className="profile-banner-overlay" />
-
-          {/* Top-right pencil edit icon for cover photo (Owner only) */}
-          {isOwnProfile && isAuthenticated && (
-            <>
-              <button 
-                type="button"
-                className="cover-edit-pencil-btn"
-                onClick={() => coverFileInputRef.current?.click()}
-                title="Change cover photo"
-              >
-                <Pencil size={15} />
-              </button>
-              <input 
-                type="file" 
-                ref={coverFileInputRef} 
-                onChange={handleCoverUpload} 
-                accept="image/*" 
-                style={{ display: 'none' }} 
-              />
-            </>
-          )}
-        </div>
-
         {/* Profile Header Content */}
         <div className="profile-hero-content">
           <div className="profile-avatar-row">
             {/* Avatar Box with Circular Pencil Edit Icon */}
             <div className="profile-avatar-box">
               <img 
-                src={profile.avatarImage} 
+                src={currentAvatarSrc} 
                 alt={profile.name} 
                 className="profile-avatar-img"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = 'flex';
+                  if (profileUserId && !avatarError) {
+                    setAvatarError(true);
+                  } else {
+                    e.currentTarget.style.display = 'none';
+                    if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = 'flex';
+                  }
                 }}
               />
               <div className="profile-avatar-fallback" style={{ display: 'none' }}>
                 {profile.name ? profile.name.split(' ').map(n => n[0]).join('').substring(0, 2) : 'A'}
               </div>
 
+              {isUploadingAvatar && (
+                <div className="profile-avatar-uploading-overlay">
+                  <Loader2 className="animate-spin text-white" size={24} />
+                </div>
+              )}
+
               {/* Bottom-right circular pencil edit icon */}
-              {isAuthenticated && (
+              {isAuthenticated && isOwnProfile && (
                 <>
                   <button 
                     type="button"
                     className="avatar-edit-pencil-btn"
                     onClick={() => fileInputRef.current?.click()}
                     title="Change profile picture"
+                    disabled={isUploadingAvatar}
                   >
                     <Pencil size={13} />
                   </button>
@@ -460,8 +877,7 @@ export default function Profile() {
                   <button 
                     className="btn btn-follow-maroon" 
                     onClick={() => {
-                      setAuthActionText('follow authors');
-                      setShowAuthModal(true);
+                      showToast("Login to access this feature");
                     }}
                     style={{ backgroundColor: '#7A1F1F', color: '#ffffff', fontWeight: 700 }}
                     id="profile-action-follow-btn"
@@ -481,6 +897,8 @@ export default function Profile() {
                   className="btn btn-secondary" 
                   onClick={() => {
                     setEditFormData({ ...profile });
+                    setEditError('');
+                    setIsSaving(false);
                     setShowEditModal(true);
                   }}
                 >
@@ -533,6 +951,7 @@ export default function Profile() {
                   <span>{profile.location}</span>
                 </div>
               )}
+
               {profile.linkedin && (
                 <a 
                   href={profile.linkedin.startsWith('http') ? profile.linkedin : `https://${profile.linkedin}`} 
@@ -556,15 +975,15 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* SIMPLIFIED STATISTICS GRID (3 Cards Only: Publications, Followers, Total Likes) */}
+      {/* SIMPLIFIED STATISTICS GRID (2 Cards Only: Published, Followers) */}
       <div className="profile-stats-grid-simple">
         <div className="stat-card-clean">
           <div className="stat-card-icon-maroon">
             <BookOpen size={20} />
           </div>
           <div className="stat-card-data">
-            <span className="stat-card-value">{publishedPapers.length}</span>
-            <span className="stat-card-label">Publications</span>
+            <span className="stat-card-value">{profile?.publicationCount ?? 0}</span>
+            <span className="stat-card-label">Published</span>
           </div>
         </div>
 
@@ -573,49 +992,30 @@ export default function Profile() {
             <UserCheck size={20} />
           </div>
           <div className="stat-card-data">
-            <span className="stat-card-value">{followerCount.toLocaleString()}</span>
+            <span className="stat-card-value">
+              {(isOwnProfile 
+                ? (profile?.followersCount !== undefined ? profile.followersCount : (profile?.followerCount !== undefined ? profile.followerCount : followerCount)) 
+                : followerCount
+              ).toLocaleString()}
+            </span>
             <span className="stat-card-label">Followers</span>
           </div>
         </div>
-
-        <div className="stat-card-clean">
-          <div className="stat-card-icon-maroon">
-            <Heart size={20} />
-          </div>
-          <div className="stat-card-data">
-            <span className="stat-card-value">3.8k</span>
-            <span className="stat-card-label">Total Likes</span>
-          </div>
-        </div>
       </div>
 
-      {/* TABS NAVIGATION (2 Tabs Only: Published & Liked) */}
-      <div className="profile-tabs-nav-container">
-        <div className="profile-tabs-scroll">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`profile-tab-button ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span className="tab-count-badge">{tab.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* TABS CONTENT PANELS */}
-      <div className="profile-tab-content">
-        {/* 1. PUBLISHED TAB */}
-        {activeTab === 'published' && (
-          publishedPapers.length > 0 ? (
-            <div className="published-grid">
-              {publishedPapers.map((paper) => (
+      {/* Published Research Section */}
+      <div className="profile-publications-section" style={{ marginTop: '24px' }}>
+        <h3 className="profile-section-title" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-text-main)', marginBottom: '16px', padding: '0 8px' }}>
+          Published Research
+        </h3>
+        {publications.length > 0 ? (
+          <div className="published-grid">
+            {publications.map((paper) => (
+              <div
+                key={paper.id}
+                className={deletingCardIds.includes(paper.id) ? 'profile-card-deleting-anim' : ''}
+              >
                 <ResearchCard
-                  key={paper.id}
                   paper={paper}
                   isBookmarked={bookmarkedIds.includes(paper.id)}
                   onToggleBookmark={handleToggleBookmark}
@@ -625,53 +1025,16 @@ export default function Profile() {
                   onDeleteClick={handleDeleteClick}
                   isOwnProfile={isOwnProfile}
                 />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon="BookOpen"
-              title="No publications yet"
-              description="Start publishing your first article or research."
-              actionText="Create Publication"
-              onAction={() => navigate('/publish')}
-            />
-          )
-        )}
-
-        {/* 2. LIKED TAB */}
-        {activeTab === 'liked' && (
-          likedPapers.length > 0 ? (
-            <div className="published-grid">
-              {likedPapers.map((paper) => (
-                <ResearchCard
-                  key={paper.id}
-                  paper={paper}
-                  isBookmarked={bookmarkedIds.includes(paper.id)}
-                  onToggleBookmark={handleToggleBookmark}
-                  isLiked={likedIds.includes(paper.id)}
-                  onToggleLike={handleToggleLike}
-                  onReadArticle={() => navigate(`/research/${paper.id}`)}
-                  isOwnProfile={false}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon="Heart"
-              title="Nothing liked yet"
-              description="Like publications to access them quickly later."
-              actionText="Explore Publications"
-              onAction={() => navigate('/explore')}
-            />
-          )
-        )}
-
-        {/* 3. FOLLOWERS TAB */}
-        {activeTab === 'followers' && (
+              </div>
+            ))}
+          </div>
+        ) : (
           <EmptyState
-            icon="Users"
-            title="No followers yet"
-            description="Publish quality content to grow your audience."
+            icon="BookOpen"
+            title="No publications"
+            description={isOwnProfile ? "Start publishing your first article or research." : "This user hasn't published any articles yet."}
+            actionText={isOwnProfile ? "Create Publication" : null}
+            onAction={isOwnProfile ? () => navigate('/publish') : null}
           />
         )}
       </div>
@@ -680,16 +1043,35 @@ export default function Profile() {
 
       {/* EDIT PROFILE MODAL */}
       {showEditModal && (
-        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+        <div className="modal-backdrop" onClick={() => !isSaving && setShowEditModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Edit Researcher Profile</h2>
-              <button className="btn-close" onClick={() => setShowEditModal(false)}>
+              <button className="btn-close" onClick={() => !isSaving && setShowEditModal(false)} disabled={isSaving}>
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="modal-form">
+              {editError && (
+                <div className="profile-edit-error-banner" role="alert">
+                  <div className="error-banner-icon">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div className="error-banner-content">
+                    <span className="error-banner-text">{editError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="error-banner-dismiss"
+                    onClick={() => setEditError('')}
+                    title="Dismiss notice"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               <div className="form-grid-2">
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
@@ -699,6 +1081,7 @@ export default function Profile() {
                     value={editFormData.name} 
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                     required
+                    disabled={isSaving}
                   />
                 </div>
 
@@ -706,9 +1089,9 @@ export default function Profile() {
                   <label className="form-label">Username / Handle</label>
                   <input 
                     type="text" 
-                    className="form-control" 
+                    className="form-control profile-username-input-readonly" 
                     value={editFormData.handle || ''} 
-                    onChange={(e) => setEditFormData({ ...editFormData, handle: e.target.value })}
+                    readOnly
                     placeholder="@username"
                     required
                   />
@@ -723,6 +1106,7 @@ export default function Profile() {
                   value={editFormData.title} 
                   onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
                   required
+                  disabled={isSaving}
                 />
               </div>
 
@@ -733,6 +1117,7 @@ export default function Profile() {
                   rows={3}
                   value={editFormData.bio} 
                   onChange={(e) => setEditFormData({ ...editFormData, bio: e.target.value })}
+                  disabled={isSaving}
                 />
               </div>
 
@@ -744,6 +1129,7 @@ export default function Profile() {
                     className="form-control" 
                     value={editFormData.location} 
                     onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
+                    disabled={isSaving}
                   />
                 </div>
 
@@ -755,6 +1141,7 @@ export default function Profile() {
                     value={editFormData.linkedin} 
                     onChange={(e) => setEditFormData({ ...editFormData, linkedin: e.target.value })}
                     placeholder="https://linkedin.com/in/username"
+                    disabled={isSaving}
                   />
                 </div>
               </div>
@@ -764,14 +1151,24 @@ export default function Profile() {
                   type="button" 
                   className="btn btn-secondary" 
                   onClick={() => setShowEditModal(false)}
+                  disabled={isSaving}
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   className="btn btn-primary"
+                  disabled={isSaving}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  Save Changes
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
                 </button>
               </div>
             </form>
@@ -784,8 +1181,10 @@ export default function Profile() {
         <div 
           className="modal-backdrop"
           onClick={() => {
-            setShowDeleteModal(false);
-            setPaperToDelete(null);
+            if (!isDeleting) {
+              setShowDeleteModal(false);
+              setPaperToDelete(null);
+            }
           }}
         >
           <div 
@@ -820,7 +1219,7 @@ export default function Profile() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <p style={{ fontSize: '0.95rem', color: 'var(--color-text-muted)', margin: 0, lineHeight: '1.5' }}>
-                Are you sure you want to permanently delete &ldquo;<strong>{paperToDelete.title}</strong>&rdquo;?
+                Are you sure you want to delete this research?
               </p>
               <p style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: 600, margin: 0, padding: '8px 12px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(220, 38, 38, 0.04)', borderLeft: '3px solid #dc2626' }}>
                 This action cannot be undone.
@@ -834,13 +1233,15 @@ export default function Profile() {
                   setShowDeleteModal(false);
                   setPaperToDelete(null);
                 }}
-                style={{ padding: '10px 20px', fontSize: '0.9rem', fontWeight: 600 }}
+                disabled={isDeleting}
+                style={{ padding: '10px 20px', fontSize: '0.9rem', fontWeight: 600, cursor: isDeleting ? 'not-allowed' : 'pointer' }}
               >
                 Cancel
               </button>
               <button 
                 className="btn" 
                 onClick={handleConfirmDelete}
+                disabled={isDeleting}
                 style={{ 
                   padding: '10px 20px', 
                   fontSize: '0.9rem', 
@@ -849,11 +1250,22 @@ export default function Profile() {
                   color: 'white', 
                   border: 'none',
                   borderRadius: 'var(--radius-lg)',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s'
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  opacity: isDeleting ? 0.7 : 1,
+                  transition: 'background-color 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}
               >
-                Delete
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </div>

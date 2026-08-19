@@ -32,62 +32,16 @@
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
 }
 
-.profile-banner-container {
-  height: 240px;
-  position: relative;
-  background-color: var(--color-primary-light, #fbf0f2);
-  overflow: hidden;
-}
-
-.profile-banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-banner-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.35) 100%);
-}
-
-/* Pencil Edit Button on Top-Right Corner of Cover Photo Banner */
-.cover-edit-pencil-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background-color: rgba(15, 23, 42, 0.65);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.cover-edit-pencil-btn:hover {
-  background-color: var(--color-primary, #6B0F1A);
-  border-color: var(--color-primary, #6B0F1A);
-  transform: scale(1.08);
-}
-
 .profile-hero-content {
-  padding: 0 var(--space-xl, 28px) var(--space-xl, 28px) var(--space-xl, 28px);
+  padding: var(--space-xl, 28px);
   position: relative;
 }
 
 .profile-avatar-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-top: -80px;
+  align-items: center;
+  margin-top: 0;
   margin-bottom: var(--space-lg, 20px);
 }
 
@@ -119,6 +73,20 @@
   justify-content: center;
   font-size: 2.6rem;
   font-weight: 700;
+}
+
+.profile-avatar-uploading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
 }
 
 /* Small Circular Pencil Edit Icon on Bottom-Right Corner of Avatar */
@@ -270,7 +238,7 @@
    -------------------------------------------------------------------------- */
 .profile-stats-grid-simple {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-lg, 20px);
 }
 
@@ -488,6 +456,20 @@
   box-shadow: 0 0 0 3px rgba(107, 15, 26, 0.1);
 }
 
+.profile-username-input-readonly {
+  background-color: #f1f5f9 !important;
+  cursor: not-allowed !important;
+  opacity: 0.8 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="dark"] .profile-username-input-readonly {
+  background-color: #111827 !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+  opacity: 0.8 !important;
+}
+
 .form-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -659,7 +641,7 @@
 
   /* Stat grid on mobile: 3 compact columns */
   .profile-stats-grid-simple {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
@@ -739,3 +721,75 @@
     transform: translateY(0);
   }
 }
+
+/* Edit Profile Modal Error Banner */
+.profile-edit-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #991b1b;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+/* Smooth deletion animation */
+.profile-card-deleting-anim {
+  animation: fadeOutSlideUp 0.50s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes fadeOutSlideUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    max-height: 800px;
+    margin-bottom: 28px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+}
+
+/* Back button and global top row controls */
+.reader-top-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 1040px;
+  margin-bottom: var(--space-lg);
+  padding: 0 var(--space-xs);
+}
+
+.reader-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.reader-back-btn:hover {
+  background-color: var(--bg-sidebar);
+  color: var(--color-text-main);
+}
+

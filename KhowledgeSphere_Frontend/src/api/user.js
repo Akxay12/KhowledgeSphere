@@ -5,15 +5,20 @@ export const getCurrentUserApi = async () => {
 };
 
 export const getUserByIdApi = async (id) => {
-  return apiClient.get(`/users/${id}`);
+  return apiClient.get(`/public/users/${id}`);
 };
 
 export const updateUserProfileApi = async (profileData) => {
-  return apiClient.put('/users/me', profileData);
+  return apiClient.put('/users/profile', profileData);
 };
 
-export const uploadAvatarApi = async (formData) => {
-  return apiClient.post('/users/me/avatar', formData, {
+export const uploadProfilePictureApi = async (formData) => {
+  return apiClient.post('/users/profile/picture', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+
+export const getProfilePictureApi = async (id) => {
+  return apiClient.get(`/public/${id}/picture`, { responseType: 'blob' });
+};
+

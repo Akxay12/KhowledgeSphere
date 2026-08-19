@@ -301,3 +301,34 @@ font[size="7"] { font-size: 3rem !important; }
 .format-italic { font-style: italic !important; }
 .format-underline { text-decoration: underline !important; }
 
+/* SOFT DARK MODE RESEARCH EDITOR HIGHLIGHTERS */
+[data-theme="dark"] [style*="fef08a" i],
+[data-theme="dark"] [style*="254, 240, 138" i] {
+  background-color: rgba(234, 179, 8, 0.3) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] [style*="bbf7d0" i],
+[data-theme="dark"] [style*="187, 247, 208" i] {
+  background-color: rgba(34, 197, 94, 0.3) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] [style*="bfdbfe" i],
+[data-theme="dark"] [style*="191, 219, 254" i] {
+  background-color: rgba(59, 130, 246, 0.3) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] [style*="fecaca" i],
+[data-theme="dark"] [style*="254, 202, 202" i] {
+  background-color: rgba(239, 68, 68, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] [style*="fed7aa" i],
+[data-theme="dark"] [style*="254, 215, 170" i] {
+  background-color: rgba(249, 115, 22, 0.3) !important;
+  color: #ffffff !important;
+}
+

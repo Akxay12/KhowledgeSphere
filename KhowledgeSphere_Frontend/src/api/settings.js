@@ -9,7 +9,7 @@ export const updateUserSettingsApi = async (settings) => {
 };
 
 export const updatePasswordApi = async (passwordData) => {
-  return apiClient.put('/settings/password', passwordData);
+  return apiClient.put('/users/password', passwordData);
 };
 
 export const deleteAccountApi = async () => {

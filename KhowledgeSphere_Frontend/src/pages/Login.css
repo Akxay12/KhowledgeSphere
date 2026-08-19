@@ -149,10 +149,10 @@
   justify-content: space-between;
 }
 
-.form-label {
+.login-form-label {
   font-size: 0.86rem;
   font-weight: 600;
-  color: #334155;
+  color: #334155 !important;
 }
 
 .req-star {
@@ -529,5 +529,54 @@
 
   .login-title {
     font-size: 1.6rem;
+  }
+}
+
+/* Creative Login Error Animation Styles */
+@keyframes shakeInput {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.shake-inputs {
+  animation: shakeInput 0.4s ease-in-out;
+}
+
+@keyframes fallAndFade {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+}
+
+.falling-text-overlay {
+  position: absolute;
+  left: 42px;
+  top: 12.5px;
+  font-size: 0.94rem;
+  color: #0f172a;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: normal;
+  letter-spacing: normal;
+}
+
+.falling-text {
+  animation: fallAndFade 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shake-inputs {
+    animation: none !important;
+  }
+  .falling-text {
+    animation: none !important;
+    opacity: 0 !important;
   }
 }

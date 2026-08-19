@@ -14,6 +14,16 @@ export default function Sidebar({ isCollapsed }) {
 
   const toggleSidebar = () => setIsOpen(!isOpen);
 
+  const getInitials = () => {
+    if (!userProfile?.name) return 'KS';
+    return userProfile.name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
   // Close mobile sidebar automatically on route location change
   useEffect(() => {
     setIsOpen(false);
@@ -33,10 +43,16 @@ export default function Sidebar({ isCollapsed }) {
 
   const isReadingArticle = location.pathname.startsWith('/research');
 
+  const isLoggedIn = !!localStorage.getItem("loggedInUser");
+
   const navItems = [
     { label: 'Home', icon: Home, path: '/home' },
     { label: 'Search', icon: Search, path: '/explore' },
-    { label: 'Publish', icon: PenTool, path: '/publish' },
+    { 
+      label: isLoggedIn ? 'Publish' : 'Login to publish', 
+      icon: PenTool, 
+      path: isLoggedIn ? '/publish' : '/login' 
+    },
     { label: 'Bookmarks', icon: Bookmark, path: '/bookmarks' },
     { label: 'Profile', icon: User, path: '/profile' },
     { label: 'Settings', icon: Settings, path: '/settings' },
@@ -82,14 +98,16 @@ export default function Sidebar({ isCollapsed }) {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button 
-            className="mobile-nav-btn" 
-            onClick={() => { navigate('/explore'); setIsOpen(false); }}
-            title="Search"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center' }}
-          >
-            <Search size={20} />
-          </button>
+          {location.pathname !== '/home' && location.pathname !== '/explore' && (
+            <button 
+              className="mobile-nav-btn" 
+              onClick={() => { navigate('/explore'); setIsOpen(false); }}
+              title="Search"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center' }}
+            >
+              <Search size={20} />
+            </button>
+          )}
           <button className="mobile-nav-btn" onClick={toggleSidebar} title="Menu">
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -167,9 +185,22 @@ export default function Sidebar({ isCollapsed }) {
           >
             <div className="profile-avatar">
               {userProfile?.avatarImage ? (
-                <img src={userProfile.avatarImage} alt={userProfile.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                <>
+                  <img 
+                    src={userProfile.avatarImage} 
+                    alt={userProfile.name} 
+                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      if (e.currentTarget.nextSibling) {
+                        e.currentTarget.nextSibling.style.display = 'flex';
+                      }
+                    }}
+                  />
+                  <span style={{ display: 'none', width: '100%', height: '100%', borderRadius: '50%', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{getInitials()}</span>
+                </>
               ) : (
-                <span>{userProfile?.name ? userProfile.name.substring(0, 2).toUpperCase() : 'KS'}</span>
+                <span>{getInitials()}</span>
               )}
             </div>
             {!isCollapsed && (

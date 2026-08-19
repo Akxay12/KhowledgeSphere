@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Palette, CheckCircle, LogOut, ShieldAlert, UserPlus, LogIn, UserX, AlertTriangle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Palette, CheckCircle, LogOut, UserPlus, LogIn, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { settingsApi } from '../api/settings';
 import { SkeletonSettings } from '../components/SkeletonLoader';
+import { showToast } from '../lib/toast';
 import './Settings.css';
 
 export default function Settings() {
@@ -12,9 +13,21 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(() => isAuthenticated ? 'password' : 'theme');
   const [isLoading, setIsLoading] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [confirmDeleteChecked, setConfirmDeleteChecked] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    localStorage.removeItem("loggedInUser");
+    localStorage.removeItem("token");
+    try {
+      await logout();
+    } catch (e) {
+      console.error('Logout error during Settings action:', e);
+    }
+    window.location.href = "/login";
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -34,6 +47,13 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [touched, setTouched] = useState({ newPassword: false, confirmPassword: false });
+
+  const isNewPasswordValid = newPassword.length > 0;
+  const isConfirmPasswordValid = confirmPassword.length > 0;
+  const passwordsMatch = newPassword === confirmPassword;
+
+  const isSubmitDisabled = !isNewPasswordValid || !isConfirmPasswordValid || !passwordsMatch;
 
   // Privacy fields state
   const [indexPublicly, setIndexPublicly] = useState(true);
@@ -63,20 +83,41 @@ export default function Settings() {
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (!newPassword) {
+      setErrorMessage('Password is required.');
+      return;
+    }
+    if (!confirmPassword) {
+      setErrorMessage('Please confirm your password.');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setErrorMessage('Passwords do not match');
       return;
     }
+
     try {
-      await settingsApi.updatePassword({ newPassword });
-      setSaveSuccess(true);
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => setSaveSuccess(false), 2000);
+      const res = await settingsApi.updatePassword({ newPassword });
+      if (res && res.success) {
+        setSaveSuccess(true);
+        setSuccessMessage('Password changed successfully');
+        showToast('Password changed successfully');
+        setNewPassword('');
+        setConfirmPassword('');
+        setErrorMessage('');
+        setTouched({ newPassword: false, confirmPassword: false });
+        setTimeout(() => {
+          setSaveSuccess(false);
+          setSuccessMessage('');
+        }, 3000);
+      } else {
+        setErrorMessage('Try again later');
+        showToast('Try again later');
+      }
     } catch (err) {
-      // Fallback UI success if backend isn't available
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      setErrorMessage('Try again later');
+      showToast('Try again later');
     }
   };
 
@@ -94,6 +135,12 @@ export default function Settings() {
 
   return (
     <div className="settings-container">
+      {isLoggingOut && (
+        <div className="logout-loading-overlay">
+          <div className="logout-loading-spinner"></div>
+          <span>Logging out...</span>
+        </div>
+      )}
       {isLoading ? (
         <SkeletonSettings />
       ) : (
@@ -109,7 +156,7 @@ export default function Settings() {
         {saveSuccess && (
           <div className="badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', gap: '6px' }}>
             <CheckCircle size={14} />
-            <span>Settings Updated</span>
+            <span>{successMessage || 'Settings Updated'}</span>
           </div>
         )}
       </div>
@@ -177,6 +224,25 @@ export default function Settings() {
           {activeTab === 'password' && (
             <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <h3 className="settings-section-title">Change Password</h3>
+
+              {/* General API error message */}
+              {errorMessage && (
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                  border: '1px solid rgba(220, 38, 38, 0.2)',
+                  color: '#dc2626',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <AlertTriangle size={16} />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
               
               {/* First New Password Field - with visibility toggle */}
               <div className="form-group">
@@ -184,10 +250,14 @@ export default function Settings() {
                 <div className="password-input-wrapper">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
-                    className="form-control"
+                    className={`form-control ${touched.newPassword && !isNewPasswordValid ? 'input-error' : ''}`}
                     placeholder="Enter new password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setTouched(prev => ({ ...prev, newPassword: true }));
+                    }}
+                    onBlur={() => setTouched(prev => ({ ...prev, newPassword: true }))}
                     required
                   />
                   <button
@@ -199,6 +269,9 @@ export default function Settings() {
                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {touched.newPassword && !isNewPasswordValid && (
+                  <span className="field-inline-error">Password is required.</span>
+                )}
               </div>
 
               {/* Second New Password Field - strictly masked without view toggle option */}
@@ -206,15 +279,36 @@ export default function Settings() {
                 <label className="form-label">Confirm New Password</label>
                 <input
                   type="password"
-                  className="form-control"
+                  className={`form-control ${touched.confirmPassword && (!isConfirmPasswordValid || !passwordsMatch) ? 'input-error' : ''}`}
                   placeholder="Re-enter new password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setTouched(prev => ({ ...prev, confirmPassword: true }));
+                  }}
+                  onBlur={() => setTouched(prev => ({ ...prev, confirmPassword: true }))}
                   required
                 />
+                {touched.confirmPassword && !isConfirmPasswordValid && (
+                  <span className="field-inline-error">Please confirm your password.</span>
+                )}
+                {isNewPasswordValid && isConfirmPasswordValid && !passwordsMatch && (
+                  <span className="field-inline-error">Passwords do not match.</span>
+                )}
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start', padding: '10px 20px', marginTop: '10px' }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isSubmitDisabled}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '10px 20px',
+                  marginTop: '10px',
+                  opacity: isSubmitDisabled ? 0.5 : 1,
+                  cursor: isSubmitDisabled ? 'not-allowed' : 'pointer'
+                }}
+              >
                 Update Password
               </button>
             </form>
@@ -339,51 +433,16 @@ export default function Settings() {
                     <button 
                       type="button" 
                       className="btn-red-logout-lg"
-                      disabled={!isAuthenticated}
+                      disabled={!isAuthenticated || isLoggingOut}
                       title={!isAuthenticated ? "Logout is disabled because you are not logged in" : ""}
-                      onClick={async () => {
-                        if (!isAuthenticated) return;
-                        await logout();
-                        navigate('/login');
-                      }}
+                      onClick={handleLogout}
                       style={{
-                        opacity: isAuthenticated ? 1 : 0.4,
-                        cursor: isAuthenticated ? 'pointer' : 'not-allowed'
+                        opacity: (isAuthenticated && !isLoggingOut) ? 1 : 0.4,
+                        cursor: (isAuthenticated && !isLoggingOut) ? 'pointer' : 'not-allowed'
                       }}
                     >
                       <LogOut size={18} />
-                      <span>Log Out Now</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="account-action-card" style={{ opacity: isAuthenticated ? 1 : 0.75 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                  <div className="account-action-icon danger-icon">
-                    <UserX size={22} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#dc2626' }}>Leave KnowledgeSphere</h4>
-                    <p style={{ margin: '4px 0 16px 0', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                      Deactivate your profile and leave the KnowledgeSphere academic network. This action will log you out immediately.
-                    </p>
-                    <button 
-                      type="button" 
-                      className="btn-leave-ks-lg"
-                      disabled={!isAuthenticated}
-                      title={!isAuthenticated ? "Leave account is disabled because you are not logged in" : ""}
-                      onClick={() => {
-                        if (!isAuthenticated) return;
-                        setShowLeaveModal(true);
-                      }}
-                      style={{
-                        opacity: isAuthenticated ? 1 : 0.4,
-                        cursor: isAuthenticated ? 'pointer' : 'not-allowed'
-                      }}
-                    >
-                      <AlertTriangle size={18} />
-                      <span>Leave KnowledgeSphere</span>
+                      <span>{isLoggingOut ? 'Logging Out...' : 'Log Out Now'}</span>
                     </button>
                   </div>
                 </div>
@@ -393,82 +452,6 @@ export default function Settings() {
         </div>
       </div>
       </>
-      )}
-
-      {/* Leave KnowledgeSphere Confirmation Modal */}
-      {showLeaveModal && (
-        <div className="settings-modal-overlay" onClick={() => { setShowLeaveModal(false); setConfirmDeleteChecked(false); }}>
-          <div className="settings-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#dc2626', marginBottom: '12px' }}>
-              <ShieldAlert size={28} />
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Leave KnowledgeSphere?</h3>
-            </div>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem', lineHeight: '1.5', marginBottom: '16px' }}>
-              Are you sure you want to leave KnowledgeSphere? You will be signed out and your active session will be ended.
-            </p>
-
-            <label style={{ 
-              display: 'flex', 
-              alignItems: 'flex-start', 
-              gap: '10px', 
-              padding: '12px',
-              backgroundColor: 'var(--bg-body)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border)',
-              marginBottom: '20px', 
-              cursor: 'pointer',
-              fontSize: '0.88rem',
-              color: 'var(--color-text-main)',
-              lineHeight: '1.45'
-            }}>
-              <input 
-                type="checkbox" 
-                checked={confirmDeleteChecked}
-                onChange={(e) => setConfirmDeleteChecked(e.target.checked)}
-                style={{ marginTop: '2px', accentColor: '#dc2626', width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
-              />
-              <span>
-                Your account will be deleted forever from KnowledgeSphere and you can't recover it later.
-              </span>
-            </label>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setShowLeaveModal(false);
-                  setConfirmDeleteChecked(false);
-                }}
-                style={{ padding: '8px 16px' }}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                className="btn-red-confirm-leave" 
-                disabled={!confirmDeleteChecked}
-                onClick={async () => {
-                  setShowLeaveModal(false);
-                  setConfirmDeleteChecked(false);
-                  try {
-                    await settingsApi.deleteAccount();
-                  } catch (e) {}
-                  logout();
-                  navigate('/');
-                }}
-
-                style={{ 
-                  padding: '8px 18px',
-                  opacity: confirmDeleteChecked ? 1 : 0.5,
-                  cursor: confirmDeleteChecked ? 'pointer' : 'not-allowed'
-                }}
-              >
-                Confirm & Leave
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

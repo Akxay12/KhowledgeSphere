@@ -1,11 +1,16 @@
 import apiClient from './client';
 
 export const loginApi = async (credentials) => {
-  return apiClient.post('/auth/login', credentials);
+  return apiClient.post('/users/login', credentials);
 };
 
 export const signupApi = async (userData) => {
-  return apiClient.post('/auth/register', userData);
+  return apiClient.post('/users/signup', {
+    name: userData.name,
+    email: userData.email,
+    username: userData.username,
+    password: userData.password,
+  });
 };
 
 export const googleLoginApi = async (googleAuthData) => {

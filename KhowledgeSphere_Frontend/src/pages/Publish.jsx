@@ -11,30 +11,32 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { publishPaper } from '../services/publicationService';
+import { createPublicationApi } from '../api/publication';
 import { useAuth } from '../context/AuthContext';
 import { CATEGORIES, PUBLICATION_TYPES as RAW_PUBLICATION_TYPES, LANGUAGES } from '../data/researchData';
 import './Publish.css';
+import { formatEnumToLabel, formatLabelToEnum } from '../lib/formatters';
 
 
 // 8 publication types with visual indicators, filtered to match the single source of truth
 const ALL_PUBLICATION_TYPES = [
-  { id: 'Research Paper', icon: BookOpen, label: 'Research Paper', desc: 'Pre-populated with sections like Abstract, Methodology, Results, and References.' },
-  { id: 'Article', icon: FileText, label: 'Article', desc: 'Structured with Introduction, Main Content body, and Conclusion.' },
-  { id: 'Blog', icon: Rss, label: 'Blog', desc: 'Flexible, content-focused layout with standard title, subtitle, and body canvas.' },
-  { id: 'News', icon: Newspaper, label: 'News', desc: 'Pre-formatted headline, subtitle, date/location entry, and sources section.' },
-  { id: 'Report', icon: TrendingUp, label: 'Report', desc: 'Structured for analysis, with Executive Summary, Findings, and Recommendations.' },
-  { id: 'Case Study', icon: Search, label: 'Case Study', desc: 'Outlined for business/clinical review: Challenge, Solution, and Impact.' },
-  { id: 'Thesis', icon: GraduationCap, label: 'Thesis', desc: 'Detailed scholarly framework with Hypothesis, Literature Review, and Bibliography.' },
-  { id: 'Book Chapter', icon: Book, label: 'Book Chapter', desc: 'Chapter foundations, core textual discussion, and developmental summaries.' }
+  { id: 'RESEARCH_PAPER', icon: BookOpen, label: 'Research Paper', desc: 'Pre-populated with sections like Abstract, Methodology, Results, and References.' },
+  { id: 'ARTICLE', icon: FileText, label: 'Article', desc: 'Structured with Introduction, Main Content body, and Conclusion.' },
+  { id: 'BLOG', icon: Rss, label: 'Blog', desc: 'Flexible, content-focused layout with standard title, subtitle, and body canvas.' },
+  { id: 'NEWS', icon: Newspaper, label: 'News', desc: 'Pre-formatted headline, subtitle, date/location entry, and sources section.' },
+  { id: 'REPORT', icon: TrendingUp, label: 'Report', desc: 'Structured for analysis, with Executive Summary, Findings, and Recommendations.' },
+  { id: 'CASE_STUDY', icon: Search, label: 'Case Study', desc: 'Outlined for business/clinical review: Challenge, Solution, and Impact.' },
+  { id: 'THESIS', icon: GraduationCap, label: 'Thesis', desc: 'Detailed scholarly framework with Hypothesis, Literature Review, and Bibliography.' },
+  { id: 'BOOK_CHAPTER', icon: Book, label: 'Book Chapter', desc: 'Chapter foundations, core textual discussion, and developmental summaries.' }
 ];
 
-const PUBLICATION_TYPES = ALL_PUBLICATION_TYPES.filter(type => RAW_PUBLICATION_TYPES.includes(type.id));
+const PUBLICATION_TYPES = ALL_PUBLICATION_TYPES.filter(type => RAW_PUBLICATION_TYPES.some(rawType => formatLabelToEnum(rawType) === type.id));
 
 // Helper to pre-populate default blocks matching publication type
 const getTemplateBlocks = (pubType) => {
   const commonStyles = { fontSize: 'base', fontFamily: 'sans', color: 'default', bold: false, italic: false, underline: false };
   switch (pubType) {
-    case 'Research Paper':
+    case 'RESEARCH_PAPER':
       return [
         { id: 'rp-1', type: 'heading-2', content: 'Abstract', ...commonStyles },
         { id: 'rp-2', type: 'paragraph', content: '', placeholder: 'Provide a concise summary of the key findings, methodology, and academic implications of your research paper here...', ...commonStyles },
@@ -55,7 +57,7 @@ const getTemplateBlocks = (pubType) => {
         { id: 'rp-17', type: 'heading-2', content: 'References', ...commonStyles },
         { id: 'rp-18', type: 'paragraph', content: '', placeholder: '[1] Author Surname, A. B. (Year). Title of the work. Publisher.\n[2] Author Surname, C. D. (Year). Journal article title. Journal Name, Volume(Issue), pages.', ...commonStyles },
       ];
-    case 'Article':
+    case 'ARTICLE':
       return [
         { id: 'ar-1', type: 'heading-2', content: 'Introduction', ...commonStyles },
         { id: 'ar-2', type: 'paragraph', content: '', placeholder: 'Hook your readers with an engaging introduction. Set the general context and present your main thesis or theme...', ...commonStyles },
@@ -66,17 +68,17 @@ const getTemplateBlocks = (pubType) => {
         { id: 'ar-7', type: 'heading-2', content: 'References (Optional)', ...commonStyles },
         { id: 'ar-8', type: 'paragraph', content: '', placeholder: 'Provide hyperlinks or citations to any academic or digital sources referenced in this article.', ...commonStyles },
       ];
-    case 'Blog':
+    case 'BLOG':
       return [
         { id: 'bl-1', type: 'paragraph', content: '', placeholder: 'Start writing your engaging blog post here! Share your personal insights, narratives, and creative ideas. You can easily insert quotes, code snippets, lists, and images to make it visually engaging and readable.', ...commonStyles },
       ];
-    case 'News':
+    case 'NEWS':
       return [
         { id: 'nw-1', type: 'paragraph', content: '', placeholder: 'CITY, Country — Write your news article lead here. Start with the most crucial information: Who, What, Where, When, and Why. Keep paragraphs short and punchy.', ...commonStyles },
         { id: 'nw-2', type: 'heading-2', content: 'Sources', ...commonStyles },
         { id: 'nw-3', type: 'paragraph', content: '', placeholder: 'List the direct interviews, official press releases, and publications that sourced this reporting.', ...commonStyles },
       ];
-    case 'Report':
+    case 'REPORT':
       return [
         { id: 'rp-r1', type: 'heading-2', content: 'Executive Summary', ...commonStyles },
         { id: 'rp-r2', type: 'paragraph', content: '', placeholder: 'Provide a high-level overview of the entire report, highlighting the core objectives, key findings, and final strategic recommendations...', ...commonStyles },
@@ -91,7 +93,7 @@ const getTemplateBlocks = (pubType) => {
         { id: 'rp-r11', type: 'heading-2', content: 'Conclusion', ...commonStyles },
         { id: 'rp-r12', type: 'paragraph', content: '', placeholder: 'Wrap up the report with a concise summary of the key outcomes, strategic milestones, and next steps...', ...commonStyles },
       ];
-    case 'Case Study':
+    case 'CASE_STUDY':
       return [
         { id: 'cs-1', type: 'heading-2', content: 'Executive Summary', ...commonStyles },
         { id: 'cs-2', type: 'paragraph', content: '', placeholder: 'Provide a quick outline of the client or subject, the core challenge faced, and the amazing quantitative results achieved...', ...commonStyles },
@@ -104,7 +106,7 @@ const getTemplateBlocks = (pubType) => {
         { id: 'cs-9', type: 'heading-2', content: 'Results & Impact', ...commonStyles },
         { id: 'cs-10', type: 'paragraph', content: '', placeholder: 'Quantify and qualify the success, detailing key performance metrics (KPIs) and testimonial feedback from clients...', ...commonStyles },
       ];
-    case 'Thesis':
+    case 'THESIS':
       return [
         { id: 'th-1', type: 'heading-2', content: 'Dedication & Acknowledgements', ...commonStyles },
         { id: 'th-2', type: 'paragraph', content: '', placeholder: 'Express academic and personal gratitude to advisors, supporting institutions, and peers...', ...commonStyles },
@@ -123,7 +125,7 @@ const getTemplateBlocks = (pubType) => {
         { id: 'th-15', type: 'heading-2', content: 'Bibliography', ...commonStyles },
         { id: 'th-16', type: 'paragraph', content: '', placeholder: 'Complete scholastic bibliography formatted strictly in APA, Chicago, or Harvard style.', ...commonStyles },
       ];
-    case 'Book Chapter':
+    case 'BOOK_CHAPTER':
       return [
         { id: 'bc-1', type: 'heading-2', content: 'Introduction to Chapter', ...commonStyles },
         { id: 'bc-2', type: 'paragraph', content: '', placeholder: 'Set the stage for this specific chapter. Bridge it seamlessly with preceding chapters and introduce the key themes discussed here...', ...commonStyles },
@@ -342,7 +344,7 @@ const insertOptions = [
 
 export default function Publish() {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const fileInputRef = useRef(null);
   
   // States
@@ -351,8 +353,8 @@ export default function Publish() {
   const [pubType, setPubType] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
   
-  const [coverImage, setCoverImage] = useState(null);
-  const [isCoverDragging, setIsCoverDragging] = useState(false);
+  const [coverImage, setCoverImage] = useState('');
+  const [isImageValid, setIsImageValid] = useState(true);
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [blocks, setBlocks] = useState([]);
@@ -363,13 +365,12 @@ export default function Publish() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [authorshipName, setAuthorshipName] = useState(user?.name || '');
-  const [affiliation, setAffiliation] = useState(user?.institution || '');
+  const [authorNameError, setAuthorNameError] = useState('');
   const [language, setLanguage] = useState('English');
 
   useEffect(() => {
     if (user) {
       if (!authorshipName && user.name) setAuthorshipName(user.name);
-      if (!affiliation && user.institution) setAffiliation(user.institution);
     }
   }, [user]);
 
@@ -835,7 +836,7 @@ export default function Publish() {
   const handleContinue = () => {
     if (category && pubType) {
       // Setup title/headline default depending on news
-      if (pubType === 'News') {
+      if (pubType === 'NEWS') {
         setTitle('HEADLINE: ');
       } else {
         setTitle('');
@@ -893,31 +894,32 @@ export default function Publish() {
     });
   };
 
-  // Image reading handlers
-  const processCoverFile = (file) => {
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        compressImage(reader.result).then(compressed => {
-          setCoverImage(compressed);
-        }).catch((err) => {
-          console.error('Failed compressing cover image, falling back to raw result:', err);
-          setCoverImage(reader.result);
-        });
-      };
-      reader.onerror = (err) => {
-        console.error('FileReader error on cover file:', err);
-      };
-      reader.readAsDataURL(file);
+  // Effect to validate pasted cover image URL and verify if it can be loaded
+  useEffect(() => {
+    if (!coverImage) {
+      setIsImageValid(true);
+      return;
     }
-  };
 
-  const handleCoverUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      processCoverFile(file);
+    if (!coverImage.startsWith('https://')) {
+      setIsImageValid(false);
+      return;
     }
-  };
+
+    let active = true;
+    const img = new window.Image();
+    img.src = coverImage;
+    img.onload = () => {
+      if (active) setIsImageValid(true);
+    };
+    img.onerror = () => {
+      if (active) setIsImageValid(false);
+    };
+
+    return () => {
+      active = false;
+    };
+  }, [coverImage]);
 
   const handleInlineImageChange = (blockId, e) => {
     const file = e.target.files[0];
@@ -1254,13 +1256,21 @@ export default function Publish() {
 
     const authorText = (authorshipName || '').trim();
     if (!authorText) {
-      setPublishError("Author Name is required. Please fill in the author name before publishing.");
+      setAuthorNameError("Author Name is required.");
+      return;
+    } else {
+      setAuthorNameError('');
+    }
+
+
+
+    if (!pubType) {
+      setPublishError("Publication Type is required. Please select a publication type before publishing.");
       return;
     }
 
-    const affiliationText = (affiliation || '').trim();
-    if (!affiliationText) {
-      setPublishError("Affiliation / Institution is required. Please fill in your affiliation before publishing.");
+    if (!category) {
+      setPublishError("Research Category is required. Please select a category before publishing.");
       return;
     }
 
@@ -1268,42 +1278,60 @@ export default function Publish() {
     setPublishError(null);
     setIsPublishing(true);
 
-    const paperId = `custom-paper-${Date.now()}`;
-    const newPaper = {
-      id: paperId,
+    const payload = {
       title: titleText,
-      authors: authorText, // Author's name
-      affiliation: affiliationText, // Author's affiliation
-      year: new Date().getFullYear().toString(),
-      country: 'United States',
+      subtitle: (subtitle || '').trim(),
+      coverImageUrl: coverImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop',
+      publicationType: pubType,
+      category: category,
+      authorName: authorText,
       language: language || 'English',
-      field: category || 'Artificial Intelligence',
-      type: pubType || 'Research Paper',
-      coverImage: coverImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop',
-      abstract: (subtitle || '').trim() || 'An empirical inquiry and scholarly composition.',
-      content: JSON.stringify(blocks), // JSON fallback representation
-      blocks: blocks,
-      docReferences: docReferences,
-      isCustom: true,
-      publishedDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      content: JSON.stringify({
+        blocks: blocks,
+        docReferences: docReferences
+      })
     };
 
-    // Publish via service (API + IndexedDB fallback)
-    publishPaper(newPaper)
-      .then((res) => {
-        const createdId = res.data?.id || paperId;
-        setPublishedPaperId(createdId);
+    // Publish via direct API
+    createPublicationApi(payload)
+      .then((metadata) => {
+        // Update local publicationCount
+        if (user) {
+          const updatedUser = {
+            ...user,
+            publicationCount: (user.publicationCount || 0) + 1
+          };
+          localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+          localStorage.setItem('knowledgesphere_user_profile', JSON.stringify(updatedUser));
+          if (updateProfile) {
+            updateProfile(updatedUser);
+          }
+        }
+
+        // Store the metadata in localStorage as an array
+        try {
+          const existingRaw = localStorage.getItem('knowledgesphere_newly_published');
+          let existingList = [];
+          if (existingRaw) {
+            const parsed = JSON.parse(existingRaw);
+            existingList = Array.isArray(parsed) ? parsed : [parsed];
+          }
+          if (!existingList.some(item => item.publicationId === metadata.publicationId)) {
+            existingList.unshift(metadata); // Show newest first
+          }
+          localStorage.setItem('knowledgesphere_newly_published', JSON.stringify(existingList));
+        } catch (e) {
+          localStorage.setItem('knowledgesphere_newly_published', JSON.stringify([metadata]));
+        }
+
+        setPublishedPaperId(metadata.publicationId);
         setIsPublishing(false);
         setShowPublishSuccess(true);
       })
       .catch((err) => {
         console.error('Error saving custom paper:', err);
         setIsPublishing(false);
-        if (err.message && (err.message.includes("Storage limit reached") || err.message.includes("Quota") || err.message.includes("quota"))) {
-          setPublishError("Storage limit reached. Please upload smaller media files or use external storage. Your research content has not been modified.");
-        } else {
-          setPublishError(err.message || "Something went wrong while publishing your research. Please try again.");
-        }
+        setPublishError(err.message || "Something went wrong while publishing your research. Please try again.");
       });
   };
 
@@ -1373,13 +1401,7 @@ export default function Publish() {
       authorLine.innerHTML = `<strong>Author:</strong> ${authorshipName || 'Anonymous'}`;
       metaContainer.appendChild(authorLine);
       
-      if (affiliation) {
-        const affLine = document.createElement('div');
-        affLine.style.fontSize = '12px';
-        affLine.style.color = '#64748b';
-        affLine.innerHTML = `<strong>Institution:</strong> ${affiliation}`;
-        metaContainer.appendChild(affLine);
-      }
+
       
       const typeLine = document.createElement('div');
       typeLine.style.fontSize = '12px';
@@ -1654,7 +1676,7 @@ export default function Publish() {
               <div className="publish-status-actions">
                 <button 
                   className="btn btn-primary" 
-                  onClick={() => navigate(`/research/${publishedPaperId}`)}
+                  onClick={() => navigate('/profile', { state: { activeTab: 'published' } })}
                   style={{ minWidth: '160px', justifyContent: 'center' }}
                 >
                   <BookOpen size={16} />
@@ -1662,7 +1684,7 @@ export default function Publish() {
                 </button>
                 <button 
                   className="btn btn-secondary" 
-                  onClick={() => navigate('/profile')}
+                  onClick={() => navigate('/profile', { state: { activeTab: 'published' } })}
                   style={{ minWidth: '160px', justifyContent: 'center' }}
                 >
                   <User size={16} />
@@ -1823,7 +1845,7 @@ export default function Publish() {
                   id="category-combobox"
                 >
                   {category ? (
-                    <span className="selected-category-text">{category}</span>
+                    <span className="selected-category-text">{formatEnumToLabel(category)}</span>
                   ) : (
                     <span className="placeholder-text">Select Category...</span>
                   )}
@@ -1845,20 +1867,23 @@ export default function Publish() {
                     </div>
                     <div className="combobox-options-list">
                       {filteredCategories.length > 0 ? (
-                        filteredCategories.map((cat, idx) => (
-                          <div 
-                            key={idx} 
-                            className={`combobox-option-item ${category === cat ? 'active' : ''}`}
-                            onClick={() => {
-                              setCategory(cat);
-                              setShowCategoryDropdown(false);
-                              setCategorySearch('');
-                            }}
-                          >
-                            <span>{cat}</span>
-                            {category === cat && <CheckCircle size={14} className="check-icon" />}
-                          </div>
-                        ))
+                        filteredCategories.map((cat, idx) => {
+                          const catEnum = formatLabelToEnum(cat);
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`combobox-option-item ${category === catEnum ? 'active' : ''}`}
+                              onClick={() => {
+                                setCategory(catEnum);
+                                setShowCategoryDropdown(false);
+                                setCategorySearch('');
+                              }}
+                            >
+                              <span>{cat}</span>
+                              {category === catEnum && <CheckCircle size={14} className="check-icon" />}
+                            </div>
+                          );
+                        })
                       ) : (
                         <div className="no-options">No categories match your search</div>
                       )}
@@ -1921,7 +1946,7 @@ export default function Publish() {
           <div className="mobile-focus-top-bar">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="mobile-focus-title">Writing Focus</span>
-              <span className="meta-badge-type" style={{ fontSize: '0.7rem' }}>{pubType}</span>
+              <span className="meta-badge-type" style={{ fontSize: '0.7rem' }}>{formatEnumToLabel(pubType)}</span>
             </div>
             <button 
               type="button" 
@@ -1942,8 +1967,8 @@ export default function Publish() {
                 <span>Setup</span>
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="meta-badge-tag">{category}</span>
-                <span className="meta-badge-type">{pubType}</span>
+                <span className="meta-badge-tag">{formatEnumToLabel(category)}</span>
+                <span className="meta-badge-type">{formatEnumToLabel(pubType)}</span>
               </div>
             </div>
             
@@ -2271,57 +2296,82 @@ export default function Publish() {
             <div className="composer-canvas">
               {/* Cover Image Section */}
               <div className="composer-cover-section" id="composer-cover-image">
-                {coverImage ? (
-                  <div className="cover-preview-container">
-                    <img src={coverImage} alt="Cover Preview" className="cover-img-rendered" referrerPolicy="no-referrer" />
-                    <div className="cover-overlay-controls">
-                      <label className="cover-control-btn btn-replace" htmlFor="cover-replace-input">
-                        <Upload size={14} />
-                        <span>Replace Cover</span>
-                      </label>
-                      <input 
-                        type="file" 
-                        id="cover-replace-input" 
-                        accept="image/*" 
-                        onChange={handleCoverUpload} 
-                        style={{ display: 'none' }} 
-                      />
-                      <button className="cover-control-btn btn-delete" onClick={() => setCoverImage(null)}>
-                        <Trash2 size={14} />
-                        <span>Delete Cover</span>
+                <div className="cover-url-form-group" style={{ marginBottom: '16px' }}>
+                  <label className="cover-url-label" style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '8px' }}>
+                    Cover Image URL
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="url" 
+                      placeholder="Paste cover image URL (https://...)" 
+                      value={coverImage} 
+                      onChange={(e) => setCoverImage(e.target.value)} 
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1.5px solid var(--color-border)',
+                        backgroundColor: 'var(--bg-primary)',
+                        color: 'var(--color-text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                        transition: 'all var(--transition-fast)'
+                      }}
+                      className="cover-url-input-field"
+                    />
+                    {coverImage && (
+                      <button 
+                        type="button"
+                        onClick={() => setCoverImage('')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--color-text-light)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Clear URL"
+                      >
+                        <XCircle size={16} />
                       </button>
-                    </div>
+                    )}
+                  </div>
+                  {!isImageValid && coverImage && (
+                    <p className="validation-error-message" style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '6px', margin: 0, fontWeight: 500 }}>
+                      Unable to load image from this URL.
+                    </p>
+                  )}
+                </div>
+
+                {coverImage && isImageValid ? (
+                  <div className="cover-preview-container">
+                    <img 
+                      src={coverImage} 
+                      alt="Cover Preview" 
+                      className="cover-img-rendered" 
+                      referrerPolicy="no-referrer" 
+                    />
                   </div>
                 ) : (
-                  <label 
-                    htmlFor="cover-file-upload" 
-                    className={`cover-upload-trigger ${isCoverDragging ? 'dragging' : ''}`}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-sm)' }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsCoverDragging(true);
-                    }}
-                    onDragLeave={() => setIsCoverDragging(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsCoverDragging(false);
-                      const file = e.dataTransfer.files[0];
-                      if (file) {
-                        processCoverFile(file);
-                      }
-                    }}
-                  >
-                    <Upload size={32} className="upload-icon-centered" />
-                    <span className="upload-title">Add Beautiful Cover Image</span>
-                    <span className="upload-subtitle">Drag and drop or click to upload a premium cover image. Fits above the title.</span>
-                    <input 
-                      type="file" 
-                      id="cover-file-upload" 
-                      accept="image/*" 
-                      onChange={handleCoverUpload} 
-                      style={{ display: 'none' }} 
-                    />
-                  </label>
+                  <div className="cover-preview-container placeholder-preview" style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    border: '1.5px dashed var(--color-border)', 
+                    borderRadius: 'var(--radius-xl)',
+                    height: '240px',
+                    gap: '12px' 
+                  }}>
+                    <Image size={40} style={{ color: 'var(--color-text-light)' }} />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                      {coverImage ? "Unable to load image preview" : "No cover image URL entered"}
+                    </span>
+                  </div>
                 )}
               </div>
 
@@ -2330,7 +2380,7 @@ export default function Publish() {
                 <input 
                   type="text" 
                   className="composer-title-input"
-                  placeholder={pubType === 'News' ? "Enter your News Headline..." : "Enter your publication title..."}
+                  placeholder={pubType === 'NEWS' ? "Enter your News Headline..." : "Enter your publication title..."}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   id="publication-title"
@@ -2347,7 +2397,7 @@ export default function Publish() {
               </div>
 
               {/* Date Block specifically for News */}
-              {pubType === 'News' && (
+              {pubType === 'NEWS' && (
                 <div className="news-date-location-bar">
                   <div className="meta-field">
                     <Calendar size={14} />
@@ -2960,11 +3010,11 @@ export default function Publish() {
                 
                 <div className="sidebar-meta-row">
                   <span className="meta-row-label">Category:</span>
-                  <span className="meta-row-value">{category}</span>
+                  <span className="meta-row-value">{formatEnumToLabel(category)}</span>
                 </div>
                 <div className="sidebar-meta-row" style={{ marginBottom: '16px' }}>
                   <span className="meta-row-label">Format:</span>
-                  <span className="meta-row-value">{pubType}</span>
+                  <span className="meta-row-value">{formatEnumToLabel(pubType)}</span>
                 </div>
 
                 <div className="form-group">
@@ -2976,28 +3026,23 @@ export default function Publish() {
                     type="text" 
                     className="form-control" 
                     value={authorshipName} 
-                    onChange={(e) => setAuthorshipName(e.target.value)}
+                    onChange={(e) => {
+                      setAuthorshipName(e.target.value);
+                      if (e.target.value.trim()) {
+                        setAuthorNameError('');
+                      }
+                    }}
                     placeholder="Enter author name (required)..." 
                     required
                   />
+                  {authorNameError && (
+                    <span className="validation-warning" style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '4px', display: 'block' }}>
+                      {authorNameError}
+                    </span>
+                  )}
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Affiliation / Institution
-                    <span className="required-star" style={{ color: '#dc2626', marginLeft: '4px' }}>*</span>
-                  </label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    value={affiliation} 
-                    onChange={(e) => setAffiliation(e.target.value)}
-                    placeholder="Enter institution / affiliation (required)..." 
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label className="form-label">
                     Language
                     <span className="required-star" style={{ color: '#dc2626', marginLeft: '4px' }}>*</span>
@@ -3012,30 +3057,8 @@ export default function Publish() {
                     ))}
                   </select>
                 </div>
-              </div>
 
-
-
-              <div className="sidebar-panel">
-                <h3 className="panel-title">Access & Licensing</h3>
-                
-                <div className="form-group">
-                  <label className="form-label">Privacy Model</label>
-                  <select className="form-control" defaultValue="PUBLIC">
-                    <option value="PUBLIC">Public (Accessible to Everyone)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">License Type</label>
-                  <select className="form-control" defaultValue="CC_BY">
-                    <option value="CC_BY">Creative Commons Attribution (CC BY 4.0)</option>
-                    <option value="CC_BY_NC">CC BY-NC 4.0 (Non-Commercial)</option>
-                    <option value="ALL_RIGHTS">All Rights Reserved</option>
-                  </select>
-                </div>
-
-                <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <button 
                     className="btn btn-primary" 
                     style={{ width: '100%', justifyContent: 'center', height: '42px' }}

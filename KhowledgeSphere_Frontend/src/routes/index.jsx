@@ -14,6 +14,7 @@ import Drafts from '../pages/Drafts';
 import Settings from '../pages/Settings';
 import NotFound from '../pages/NotFound';
 import ErrorBoundary from '../components/ErrorBoundary';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
   return (
@@ -28,13 +29,16 @@ export default function AppRoutes() {
         <Route element={<MainLayout />}>
           <Route path="/home" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
-          <Route path="/publish" element={<Publish />} />
+          <Route path="/publish" element={<ProtectedRoute><Publish /></ProtectedRoute>} />
           <Route path="/research/:id" element={<ResearchDetails />} />
+          <Route path="/publications/:id" element={<ResearchDetails />} />
           <Route path="/research-details" element={<ResearchDetails />} /> {/* Easy preview URL */}
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/bookmarks" element={<Bookmarks />} />
-          <Route path="/drafts" element={<Drafts />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/profile/:userId" element={<Profile />} />
+          <Route path="/user/:id" element={<Profile />} />
+          <Route path="/bookmarks" element={<ProtectedRoute><Bookmarks /></ProtectedRoute>} />
+          <Route path="/drafts" element={<ProtectedRoute><Drafts /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

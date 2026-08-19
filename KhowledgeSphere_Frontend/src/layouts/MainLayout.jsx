@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+import { recordNavigation } from '../lib/profileNavigation';
 import './MainLayout.css';
 
 export default function MainLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    recordNavigation(location.pathname + location.search);
+  }, [location]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(prev => !prev);

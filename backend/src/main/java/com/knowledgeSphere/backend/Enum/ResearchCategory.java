@@ -1,0 +1,26 @@
+package com.knowledgeSphere.backend.Enum;
+
+public enum ResearchCategory {
+    ARTIFICIAL_INTELLIGENCE,
+    AGRICULTURE,
+    MEDICINE,
+    ECONOMICS,
+    POLITICAL_SCIENCE,
+    PSYCHOLOGY,
+    EDUCATION,
+    ENVIRONMENTAL_SCIENCE,
+    CLIMATE_CHANGE ,
+    PHYSICS,
+    CHEMISTRY,
+    BIOLOGY,
+    MATHEMATICS,
+    LAW,
+    FINANCE,
+    BUSINESS,
+    SOCIOLOGY,
+    LITERATURE,
+    PHILOSOPHY,
+    SPACE_RESEARCH,
+    RENEWWABLE_ENERGY
+
+}

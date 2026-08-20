@@ -1,0 +1,23 @@
+
+
+services:
+  postgres:
+    image: postgres:17
+
+    container_name: knowledgesphere-postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: knowledgesphere_db
+      POSTGRES_USER: khowledgesphere
+      POSTGRES_PASSWORD: namovekteshay12
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useNavigationType } from 'react-router-dom';
 import { X, Search } from 'lucide-react';
 import { CATEGORIES, PUBLICATION_TYPES, LANGUAGES } from '../data/researchData';
 import { fetchPublications, searchPublications, searchGlobal } from '../services/publicationService';
@@ -22,14 +22,15 @@ export default function Explore() {
 
   // Cache validation and restoration logic
   const cached = getPageCache('explore');
-  const prev = getPreviousPath();
-  const isReturningFromProfile = prev.startsWith('/profile') || prev.startsWith('/user');
+  const isPop = useNavigationType() === 'POP';
   const hasValidCache = cached && Array.isArray(cached.allPapers) && cached.allPapers.length > 0;
-  const shouldRestore = isReturningFromProfile && hasValidCache;
+  const shouldRestore = isPop && hasValidCache;
+  const searchQuery = searchParams.get('q') || '';
+  const shouldRestoreSearchResults = shouldRestore && searchQuery === (cached?.searchQuery || '');
 
   const [defaultPapers, setDefaultPapers] = useState(shouldRestore ? (cached.defaultPapers || []) : []);
   const [allPapers, setAllPapers] = useState(shouldRestore ? cached.allPapers : []);
-  const [isLoading, setIsLoading] = useState(shouldRestore ? cached.isLoading : true);
+  const [isLoading, setIsLoading] = useState(shouldRestore ? false : true);
   const [error, setError] = useState(shouldRestore ? (cached.error || null) : null);
 
   // Selected filters in local state
@@ -39,11 +40,10 @@ export default function Explore() {
   const [selectedType, setSelectedType] = useState(shouldRestore ? (cached.selectedType || 'All Types') : 'All Types');
 
   // Search API States
-  const searchQuery = searchParams.get('q') || '';
   const [searchVal, setSearchVal] = useState(searchQuery);
-  const [searchedResearches, setSearchedResearches] = useState([]);
-  const [searchedUsers, setSearchedUsers] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [searchedResearches, setSearchedResearches] = useState(shouldRestoreSearchResults ? (cached.searchedResearches || []) : []);
+  const [searchedUsers, setSearchedUsers] = useState(shouldRestoreSearchResults ? (cached.searchedUsers || []) : []);
+  const [isSearching, setIsSearching] = useState(shouldRestoreSearchResults ? (cached.isSearching || false) : false);
 
   // Synchronize local input value with URL search query
   useEffect(() => {
@@ -94,15 +94,38 @@ export default function Explore() {
         selectedField,
         selectedYear,
         selectedLanguage,
-        selectedType
+        selectedType,
+        searchedResearches,
+        searchedUsers,
+        isSearching,
+        searchQuery
       });
     }
-  }, [allPapers, defaultPapers, isLoading, error, selectedField, selectedYear, selectedLanguage, selectedType]);
+  }, [
+    allPapers,
+    defaultPapers,
+    isLoading,
+    error,
+    selectedField,
+    selectedYear,
+    selectedLanguage,
+    selectedType,
+    searchedResearches,
+    searchedUsers,
+    isSearching,
+    searchQuery
+  ]);
+
+  const isFirstRender = React.useRef(true);
 
   useEffect(() => {
-    if (shouldRestore) {
+    // Skip loading data on first mount if state is already restored from cache
+    const isDataAlreadyRestored = searchQuery ? shouldRestoreSearchResults : shouldRestore;
+    if (isDataAlreadyRestored && isFirstRender.current) {
+      isFirstRender.current = false;
       return;
     }
+    isFirstRender.current = false;
 
     let active = true;
 
@@ -231,7 +254,8 @@ export default function Explore() {
     selectedLanguage,
     selectedType,
     searchQuery,
-    shouldRestore
+    shouldRestore,
+    shouldRestoreSearchResults
   ]);
 
   // Scroll Restoration

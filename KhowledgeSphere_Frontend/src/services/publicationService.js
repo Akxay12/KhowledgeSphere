@@ -13,9 +13,12 @@ import {
   getMyPublicationsApi,
   searchPublicationsApi,
   searchGlobalApi,
+  getFollowingFeedApi,
 } from '../api/publication';
 import { getPapers, getPaper, savePaper, deletePaper } from '../lib/storage';
 import { formatEnumToLabel } from '../lib/formatters';
+import { getFollowingApi } from '../api/follows';
+import { getUserByIdApi } from '../api/user';
 
 const parseContent = (contentString) => {
   let blocks = [];
@@ -331,6 +334,112 @@ export const searchGlobal = async (query) => {
     return { success: false, error: err.message || 'Search failed' };
   }
   return { success: false, data: { researches: [], users: [] } };
+};
+
+const resolveUserIdByAuthorName = async (authorName) => {
+  if (!authorName) return null;
+  try {
+    const res = await searchGlobalApi(authorName);
+    if (res && res.users && Array.isArray(res.users)) {
+      const queryLower = authorName.toLowerCase().trim();
+      const match = res.users.find(u => 
+        (u.username && u.username.toLowerCase().trim() === queryLower) || 
+        (u.name && u.name.toLowerCase().trim() === queryLower)
+      ) || res.users[0];
+      if (match) {
+        return match.userId || match.id;
+      }
+    }
+  } catch (e) {
+    console.warn(`Failed to resolve user ID for author ${authorName}:`, e);
+  }
+  return null;
+};
+
+export const fetchFollowingPublications = async () => {
+  try {
+    const apiData = await getFollowingFeedApi();
+    if (apiData && Array.isArray(apiData)) {
+      const mappedData = apiData.map(item => {
+        const { blocks, docReferences } = parseContent(item.content);
+        return {
+          ...item,
+          id: item.publicationId || item.id,
+          title: item.title,
+          subtitle: item.subtitle,
+          abstract: item.subtitle || item.abstract,
+          coverImage: item.coverImageUrl || item.coverImage,
+          authors: item.authorName || item.authors,
+          language: item.language,
+          type: formatEnumToLabel(item.publicationType || item.type),
+          category: formatEnumToLabel(item.category || item.field),
+          field: formatEnumToLabel(item.category || item.field),
+          publishedDate: item.publishedAt || item.publishedDate,
+          year: item.publishedAt ? new Date(item.publishedAt).getFullYear().toString() : (item.year || '2026'),
+          blocks: blocks,
+          docReferences: docReferences
+        };
+      });
+
+      // Resolve userIds for all unique authors in parallel
+      const uniqueAuthors = Array.from(new Set(mappedData.map(item => item.authors).filter(Boolean)));
+      const authorIdMap = {};
+      
+      try {
+        const followingIds = await getFollowingApi();
+        if (Array.isArray(followingIds) && followingIds.length > 0) {
+          const profiles = await Promise.all(
+            followingIds.map(async (id) => {
+              try {
+                return await getUserByIdApi(id);
+              } catch (e) {
+                console.warn(`Failed to fetch profile for user ${id}:`, e);
+                return null;
+              }
+            })
+          );
+          
+          profiles.filter(Boolean).forEach(profile => {
+            const pId = profile.userId || profile.id;
+            if (pId) {
+              if (profile.name) {
+                authorIdMap[profile.name.toLowerCase().trim()] = pId;
+              }
+              if (profile.username) {
+                authorIdMap[profile.username.toLowerCase().trim()] = pId;
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to resolve followed user profiles:', err);
+      }
+      
+      await Promise.all(uniqueAuthors.map(async (author) => {
+        const authorKey = author.toLowerCase().trim();
+        if (!authorIdMap[authorKey]) {
+          const userId = await resolveUserIdByAuthorName(author);
+          if (userId) {
+            authorIdMap[authorKey] = userId;
+          }
+        }
+      }));
+      
+      mappedData.forEach(item => {
+        if (item.authors) {
+          const authorKey = item.authors.toLowerCase().trim();
+          if (authorIdMap[authorKey]) {
+            item.userId = authorIdMap[authorKey];
+          }
+        }
+      });
+
+      return { success: true, data: mappedData };
+    }
+  } catch (err) {
+    return { success: false, data: [], error: err.message || 'Error loading following feed' };
+  }
+  return { success: false, data: [], error: 'Failed to load following feed' };
 };
 
 

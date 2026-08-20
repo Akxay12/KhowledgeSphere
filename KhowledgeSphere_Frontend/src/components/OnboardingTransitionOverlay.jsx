@@ -56,11 +56,6 @@ export default function OnboardingTransitionOverlay({
 
   if (!isActive) return null;
 
-  const handleSkip = () => {
-    if (onNavigate) onNavigate(targetPath);
-    if (onComplete) onComplete();
-  };
-
   return (
     <AnimatePresence>
       <motion.div
@@ -73,16 +68,6 @@ export default function OnboardingTransitionOverlay({
       >
         {/* Background Particles & Ambient Glow */}
         <AmbientParticles count={26} color="white" />
-
-        {/* Skip button for accessibility */}
-        <button
-          type="button"
-          className="overlay-skip-btn"
-          onClick={handleSkip}
-          title="Skip animation"
-        >
-          Skip
-        </button>
 
         {/* Central Stage */}
         <div className="onboarding-overlay-stage">

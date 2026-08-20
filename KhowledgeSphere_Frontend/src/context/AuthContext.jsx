@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getStoredUserProfile, getStoredAuthSession, saveUserProfile, isUserAuthenticated } from '../lib/authStorage';
 import { loginApi, signupApi, googleLoginApi, logoutApi } from '../api/auth';
-import { getCurrentUserApi, getProfilePictureApi } from '../api/user';
+import { getCurrentUserApi, getProfilePictureApi, updateUserProfileApi } from '../api/user';
 import { getFollowingApi, toggleFollowApi } from '../api/follows';
 import { getLikesApi } from '../api/publication';
 
@@ -148,6 +148,35 @@ export function AuthProvider({ children }) {
         fetchProfileImages(userId);
       }
 
+      // Handle default/entered profession for newly registered users
+      const username = response?.username;
+      if (username) {
+        const pendingProfession = localStorage.getItem(`reg_prof_${username}`);
+        if (pendingProfession) {
+          try {
+            const requestPayload = {
+              name: response.name || response.fullName || '',
+              profession: pendingProfession,
+              bio: response.bio || '',
+              location: response.location || '',
+              linkedinUrl: response.linkedinUrl || response.linkdinUrl || ''
+            };
+            const updatedUser = await updateUserProfileApi(requestPayload);
+            // Merge updated user data
+            const mergedUser = {
+              ...response,
+              ...updatedUser
+            };
+            localStorage.setItem('loggedInUser', JSON.stringify(mergedUser));
+            setUser(mergedUser);
+          } catch (updateError) {
+            console.error("Failed to automatically update profession on first login:", updateError);
+          } finally {
+            localStorage.removeItem(`reg_prof_${username}`);
+          }
+        }
+      }
+
       // Fetch following list
       await fetchFollowingList();
 
@@ -164,6 +193,8 @@ export function AuthProvider({ children }) {
     try {
       // Calls backend signup endpoint which returns plain string response on success
       const response = await signupApi(userData);
+      // Store the desired default/entered profession in local storage
+      localStorage.setItem(`reg_prof_${userData.username}`, userData.profession?.trim() || 'Researcher and Writer');
       return response;
     } catch (error) {
       throw error;
@@ -178,6 +209,30 @@ export function AuthProvider({ children }) {
       if (token) {
         localStorage.setItem('token', token);
       }
+
+      // Handle default/entered profession for newly registered users on Google Authentication
+      const username = userProfile.username;
+      if (username) {
+        const pendingProfession = localStorage.getItem(`reg_prof_${username}`);
+        if (pendingProfession) {
+          try {
+            const requestPayload = {
+              name: userProfile.name || userProfile.fullName || '',
+              profession: pendingProfession,
+              bio: userProfile.bio || '',
+              location: userProfile.location || '',
+              linkedinUrl: userProfile.linkedinUrl || userProfile.linkdinUrl || ''
+            };
+            const updatedUser = await updateUserProfileApi(requestPayload);
+            Object.assign(userProfile, updatedUser);
+          } catch (updateError) {
+            console.error("Failed to automatically update profession on first login:", updateError);
+          } finally {
+            localStorage.removeItem(`reg_prof_${username}`);
+          }
+        }
+      }
+
       localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
       setUser(userProfile);
       setIsAuthenticated(true);

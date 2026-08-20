@@ -159,7 +159,7 @@ export default function Login() {
     } catch (err) {
       if (err.message === 'AUTHENTICATION_CANCELLED') {
         setErrorType('GOOGLE_CANCELLED');
-        setErrorMessage('Google sign-in was cancelled. Click "Continue with Google" to try again.');
+        setErrorMessage('Google sign-in was cancelled.');
       } else if (err.message === 'NETWORK_ERROR') {
         setErrorType('NETWORK_ERROR');
         setErrorMessage('Network error connecting to Google. Please check your internet connection.');

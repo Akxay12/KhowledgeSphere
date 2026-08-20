@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useNavigate, useNavigationType } from 'react-router-dom';
 import { RefreshCw, Sparkles, UserPlus, LogIn } from 'lucide-react';
-import { fetchPublications } from '../services/publicationService';
+import { fetchPublications, fetchFollowingPublications } from '../services/publicationService';
 import ResearchCard from '../components/ResearchCard';
 import { SkeletonCard } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
@@ -14,27 +14,49 @@ import './Home.css';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, followingIds } = useAuth();
 
   // Cache validation and restoration logic
   const cached = getPageCache('home');
-  const prev = getPreviousPath();
-  const isReturningFromProfile = prev.startsWith('/profile') || prev.startsWith('/user');
-  const hasValidCache = cached && Array.isArray(cached.papers) && cached.papers.length > 0;
-  const shouldRestore = isReturningFromProfile && hasValidCache;
+  const isPop = useNavigationType() === 'POP';
+  
+  const cachedFollowingKey = cached?.followingIdsKey || '';
+  const currentFollowingKey = Array.from(followingIds || []).sort().join(',');
+  const followListChanged = cachedFollowingKey && cachedFollowingKey !== currentFollowingKey;
 
-  const [papers, setPapers] = useState(shouldRestore ? cached.papers : []);
-  const [isLoading, setIsLoading] = useState(shouldRestore ? cached.isLoading : true);
+  const hasValidCache = cached && (
+    (Array.isArray(cached.papers) && cached.papers.length > 0) ||
+    (Array.isArray(cached.followingPapers) && cached.followingPapers.length > 0)
+  );
+  const shouldRestore = isPop && hasValidCache;
+  const shouldRestoreFollowing = shouldRestore && !followListChanged;
+
+  const [activeTab, setActiveTab] = useState(shouldRestore && cached?.activeTab ? cached.activeTab : 'trending');
+  const [hasFetchedTrending, setHasFetchedTrending] = useState(shouldRestore && typeof cached?.hasFetchedTrending === 'boolean' ? cached.hasFetchedTrending : false);
+  const [papers, setPapers] = useState(shouldRestore ? (cached.papers || []) : []);
+  const [isLoading, setIsLoading] = useState(shouldRestore && typeof cached?.isLoading === 'boolean' ? cached.isLoading : true);
   const [error, setError] = useState(shouldRestore ? cached.error : null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Following Tab States
+  const [followingPapers, setFollowingPapers] = useState(shouldRestoreFollowing && cached?.followingPapers ? cached.followingPapers : []);
+  const [isFollowingLoading, setIsFollowingLoading] = useState(false);
+  const [followingError, setFollowingError] = useState(shouldRestoreFollowing ? cached.followingError : null);
+  const [hasFetchedFollowing, setHasFetchedFollowing] = useState(shouldRestoreFollowing && typeof cached?.hasFetchedFollowing === 'boolean' ? cached.hasFetchedFollowing : false);
+
   useEffect(() => {
-    // Only sync back to cache when we actually have papers loaded,
-    // and never overwrite a valid loaded feed with empty initial state.
-    if (papers && papers.length > 0) {
-      savePageCache('home', { papers, isLoading, error });
-    }
-  }, [papers, isLoading, error]);
+    savePageCache('home', { 
+      papers, 
+      isLoading, 
+      error, 
+      activeTab,
+      followingPapers,
+      followingError,
+      hasFetchedTrending,
+      hasFetchedFollowing,
+      followingIdsKey: currentFollowingKey
+    });
+  }, [papers, isLoading, error, activeTab, followingPapers, followingError, hasFetchedTrending, hasFetchedFollowing, currentFollowingKey]);
 
   // Bookmarking persistence
   const [bookmarkedIds, setBookmarkedIds] = useState([]);
@@ -70,6 +92,7 @@ export default function Home() {
       setError(err.message || 'Error loading publications');
     } finally {
       setIsLoading(false);
+      setHasFetchedTrending(true);
     }
   }, []);
 
@@ -89,18 +112,78 @@ export default function Home() {
       setError(err.message || 'Error loading publications');
     } finally {
       setIsRefreshing(false);
+      setHasFetchedTrending(true);
     }
   };
 
+  const loadFollowingFeed = useCallback(async () => {
+    setIsFollowingLoading(true);
+    setFollowingError(null);
+    setFollowingPapers([]);
+    try {
+      const res = await fetchFollowingPublications();
+      if (res.success) {
+        setFollowingPapers(res.data || []);
+      } else {
+        setFollowingError(res.error || 'Unable to load following feed.');
+      }
+    } catch (err) {
+      setFollowingError(err.message || 'Unable to load following feed.');
+    } finally {
+      setIsFollowingLoading(false);
+      setHasFetchedFollowing(true);
+    }
+  }, []);
+
+  const handleRefreshFollowingFeed = async () => {
+    setIsFollowingLoading(true);
+    setFollowingError(null);
+    setFollowingPapers([]);
+    const apiPromise = fetchFollowingPublications();
+    const delayPromise = new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const [res] = await Promise.all([apiPromise, delayPromise]);
+      if (res.success) {
+        setFollowingPapers(res.data || []);
+      } else {
+        setFollowingError(res.error || 'Unable to load following feed.');
+      }
+    } catch (err) {
+      setFollowingError(err.message || 'Unable to load following feed.');
+    } finally {
+      setIsFollowingLoading(false);
+      setHasFetchedFollowing(true);
+    }
+  };
+
+  // Dynamically listen to follow/unfollow actions while Home is mounted
+  const prevFollowingKeyRef = useRef(currentFollowingKey);
   useEffect(() => {
-    if (!shouldRestore) {
+    if (prevFollowingKeyRef.current !== currentFollowingKey) {
+      prevFollowingKeyRef.current = currentFollowingKey;
+      setHasFetchedFollowing(false);
+      if (activeTab === 'following') {
+        loadFollowingFeed();
+      }
+    }
+  }, [currentFollowingKey, activeTab, loadFollowingFeed]);
+
+  useEffect(() => {
+    if (activeTab === 'trending' && !shouldRestore && !hasFetchedTrending) {
       loadFeed();
     }
-  }, [loadFeed, shouldRestore]);
+  }, [loadFeed, shouldRestore, activeTab, hasFetchedTrending]);
+
+  useEffect(() => {
+    if (activeTab === 'following' && isAuthenticated && !shouldRestoreFollowing && !hasFetchedFollowing) {
+      loadFollowingFeed();
+    }
+  }, [loadFollowingFeed, shouldRestoreFollowing, activeTab, isAuthenticated, hasFetchedFollowing]);
 
   // Scroll Restoration
   useLayoutEffect(() => {
-    if (!isLoading) {
+    const currentLoading = activeTab === 'trending' ? isLoading : isFollowingLoading;
+    if (!currentLoading) {
       const savedScroll = getScrollPosition('home');
       if (savedScroll > 0) {
         window.scrollTo({
@@ -110,7 +193,7 @@ export default function Home() {
         clearScrollPosition('home');
       }
     }
-  }, [isLoading]);
+  }, [isLoading, isFollowingLoading, activeTab]);
 
   // Handle bookmark toggle
   const handleToggleBookmark = async (id) => {
@@ -134,22 +217,56 @@ export default function Home() {
 
   return (
     <div className="feed-container">
-      {/* Feed Header */}
-      <div className="tab-nav-wrapper" style={{ marginTop: 0, justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)' }}>
-        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>Home Feed</h2>
-        <button 
-          className="btn-refresh-feed" 
-          onClick={handleRefreshFeed}
-          disabled={isLoading || isRefreshing}
-          title="Refresh Feed"
-        >
-          <RefreshCw size={15} className={isLoading || isRefreshing ? 'spin-animation' : ''} />
-          <span>Refresh</span>
-        </button>
+      {/* Home Title */}
+      <div className="feed-header-section">
+        <div className="feed-title-block">
+          <h2>Home</h2>
+        </div>
       </div>
 
-      {/* Guest Mode Banner */}
-      {!isAuthenticated && !isLoading && (
+      {/* Feed Header */}
+      <div className="tab-nav-wrapper" style={{ marginTop: 0, justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)' }}>
+        <div className="feed-tabs">
+          <div 
+            className={`feed-tab ${activeTab === 'following' ? 'active' : ''}`}
+            onClick={() => {
+              if (activeTab !== 'following') {
+                setActiveTab('following');
+                if (isAuthenticated) {
+                  loadFollowingFeed();
+                }
+              }
+            }}
+          >
+            Following
+          </div>
+          <div 
+            className={`feed-tab ${activeTab === 'trending' ? 'active' : ''}`}
+            onClick={() => {
+              if (activeTab !== 'trending') {
+                setActiveTab('trending');
+              }
+            }}
+          >
+            Trending
+          </div>
+        </div>
+
+        {((activeTab === 'trending') || (activeTab === 'following' && isAuthenticated)) && (
+          <button 
+            className="btn-refresh-feed" 
+            onClick={activeTab === 'trending' ? handleRefreshFeed : handleRefreshFollowingFeed}
+            disabled={isLoading || isRefreshing || isFollowingLoading}
+            title="Refresh Feed"
+          >
+            <RefreshCw size={15} className={isLoading || isRefreshing || isFollowingLoading ? 'spin-animation' : ''} />
+            <span>Refresh</span>
+          </button>
+        )}
+      </div>
+
+      {/* Guest Mode Banner - Only shown on Trending tab for guests */}
+      {!isAuthenticated && activeTab === 'trending' && !isLoading && (
         <div style={{
           backgroundColor: '#ffffff',
           border: '1.5px solid #fecaca',
@@ -232,42 +349,92 @@ export default function Home() {
         </div>
       )}
 
-      {isLoading ? (
-        <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      ) : error ? (
-        <ErrorState
-          title="Failed to Load Publications"
-          message={error}
-          onRetry={loadFeed}
-        />
-      ) : papers.length > 0 ? (
-        <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
-          {papers.map((paper) => {
-            const isBookmarked = bookmarkedIds.includes(paper.id);
-            return (
-              <ResearchCard
-                key={paper.id}
-                paper={paper}
-                isBookmarked={isBookmarked}
-                onToggleBookmark={handleToggleBookmark}
-                onReadArticle={() => navigate(`/research/${paper.id}`)}
-              />
-            );
-          })}
-        </div>
+      {activeTab === 'trending' ? (
+        isLoading ? (
+          <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : error ? (
+          <ErrorState
+            title="Failed to Load Publications"
+            message={error}
+            onRetry={loadFeed}
+          />
+        ) : papers.length > 0 ? (
+          <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
+            {papers.map((paper) => {
+              const isBookmarked = bookmarkedIds.includes(paper.id);
+              return (
+                <ResearchCard
+                  key={paper.id}
+                  paper={paper}
+                  isBookmarked={isBookmarked}
+                  onToggleBookmark={handleToggleBookmark}
+                  onReadArticle={() => navigate(`/research/${paper.id}`)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            icon="BookOpen"
+            title="No publications available"
+            description="Be the first to share knowledge with the community."
+            actionText="Publish Research"
+            onAction={() => navigate('/publish')}
+          />
+        )
       ) : (
-        <EmptyState
-          icon="BookOpen"
-          title="No publications available"
-          description="Be the first to share knowledge with the community."
-          actionText="Publish Research"
-          onAction={() => navigate('/publish')}
-        />
+        // Following Tab
+        !isAuthenticated ? (
+          <EmptyState
+            icon="Users"
+            title="Following"
+            description="Log in or sign up to see followers feed"
+            actionText="Sign In"
+            onAction={() => navigate('/login')}
+            secondaryActionText="Create Account"
+            onSecondaryAction={() => navigate('/register')}
+          />
+        ) : isFollowingLoading ? (
+          <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : followingError ? (
+          <ErrorState
+            title="Unable to load following feed."
+            message="Please try again."
+            onRetry={loadFollowingFeed}
+          />
+        ) : followingPapers.length > 0 ? (
+          <div className="feed-cards-grid" style={{ padding: '10px 0 30px' }}>
+            {followingPapers.map((paper) => {
+              const isBookmarked = bookmarkedIds.includes(paper.id);
+              return (
+                <ResearchCard
+                  key={paper.id}
+                  paper={paper}
+                  isBookmarked={isBookmarked}
+                  onToggleBookmark={handleToggleBookmark}
+                  onReadArticle={() => navigate(`/research/${paper.id}`)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            icon="Users"
+            title="No research from people you follow yet."
+            description="Find authors you like and follow them to see their latest work here."
+            actionText="Explore Authors"
+            onAction={() => navigate('/explore')}
+          />
+        )
       )}
     </div>
   );

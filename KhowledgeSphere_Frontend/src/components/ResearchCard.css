@@ -162,6 +162,11 @@
 .card-authors-value {
   font-weight: 600;
   color: var(--color-text-main);
+  text-decoration: none;
+}
+
+.card-authors-container:hover .card-authors-value {
+  text-decoration: none;
 }
 
 /* Abstract clamped to 3 lines */

@@ -128,7 +128,7 @@ export default function ResearchCard({
               </div>
               <div className="card-authors-info">
                 <span className="card-authors-label">By</span>
-                <span className="card-authors-value" style={{ textDecoration: paper.userId ? 'underline' : 'none' }}>{authors}</span>
+                <span className="card-authors-value">{authors}</span>
               </div>
             </div>
           )}

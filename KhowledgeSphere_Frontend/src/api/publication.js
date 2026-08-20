@@ -60,3 +60,7 @@ export const searchGlobalApi = async (query) => {
   return apiClient.get('/api/search', { params: { q: query } });
 };
 
+export const getFollowingFeedApi = async () => {
+  return apiClient.get('/publications/feed/following');
+};
+

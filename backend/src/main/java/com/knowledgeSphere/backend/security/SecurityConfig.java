@@ -37,7 +37,7 @@ public class SecurityConfig {
                     corsConfig.setAllowedOrigins(
         java.util.List.of(
                 "http://localhost:3000",
-                "https://khowledge-sphere.vercel.app"
+                "https://khowledge-sphere-bfrz.vercel.app/"
         )
 );
                     corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));

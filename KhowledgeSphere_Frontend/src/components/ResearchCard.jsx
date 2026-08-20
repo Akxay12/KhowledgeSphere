@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bookmark, Calendar, Globe, BookOpen, Trash2, Heart } from 'lucide-react';
+import { API_BASE_URL } from '../api/client';
 import ImageWithFallback from './ImageWithFallback';
 import { isUserAuthenticated } from '../lib/authStorage';
 import { handleProfileNavigate } from '../lib/profileNavigation';
@@ -117,7 +118,7 @@ export default function ResearchCard({
               <div className="card-avatar-circle" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {paper.userId ? (
                   <ImageWithFallback
-                    src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/${paper.userId}/picture`}
+                    src={`${API_BASE_URL}/public/${paper.userId}/picture`}
                     alt={authors}
                     fallbackType="avatar"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}

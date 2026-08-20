@@ -11,6 +11,7 @@ import EmptyState from '../components/EmptyState';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { useAuth } from '../context/AuthContext';
 import { bookmarkApi } from '../api/bookmark';
+import { API_BASE_URL } from '../api/client';
 import { showToast } from '../lib/toast';
 import { getScrollPosition, clearScrollPosition, getPageCache, savePageCache, getPreviousPath } from '../lib/profileNavigation';
 import './Explore.css';
@@ -500,7 +501,7 @@ export default function Explore() {
                     >
                       <div className="user-search-avatar">
                         <ImageWithFallback 
-                          src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/${user.userId || user.id}/picture`}
+                          src={`${API_BASE_URL}/public/${user.userId || user.id}/picture`}
                           alt={user.name || user.username}
                           fallbackType="avatar"
                         />

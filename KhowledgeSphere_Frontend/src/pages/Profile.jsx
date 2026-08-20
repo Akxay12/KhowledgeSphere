@@ -26,6 +26,7 @@ import {
 import { getPapers, deletePaper } from '../lib/storage';
 import { fetchPublications, fetchPublicationsByUser, fetchMyPublications, removePublication } from '../services/publicationService';
 import { updateUserProfileApi, uploadProfilePictureApi, getUserByIdApi } from '../api/user';
+import { API_BASE_URL } from '../api/client';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 
@@ -290,7 +291,6 @@ export default function Profile() {
     );
   };
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const profileUserId = profile?.userId || profile?.id;
   const backendAvatarUrl = profileUserId ? `${API_BASE_URL}/public/${profileUserId}/picture?t=${avatarVersion}` : null;
 

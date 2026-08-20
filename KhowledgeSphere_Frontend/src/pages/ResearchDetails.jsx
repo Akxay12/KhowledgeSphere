@@ -5,6 +5,7 @@ import { fetchPublicationById, fetchPublications, fetchComments, addComment, del
 import { showToast } from '../lib/toast';
 import { useAuth } from '../context/AuthContext';
 import { bookmarkApi } from '../api/bookmark';
+import { API_BASE_URL } from '../api/client';
 import { handleProfileNavigate } from '../lib/profileNavigation';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -790,7 +791,7 @@ export default function ResearchDetails() {
           >
             {paper.userId ? (
               <ImageWithFallback
-                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/${paper.userId}/picture`}
+                src={`${API_BASE_URL}/public/${paper.userId}/picture`}
                 alt={paper.authors}
                 fallbackType="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
@@ -1172,7 +1173,7 @@ export default function ResearchDetails() {
                         onClick={() => c.userId && handleProfileNavigate(navigate, c.userId)}
                       >
                         <ImageWithFallback
-                          src={c.profilePictureUrl ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${c.profilePictureUrl}` : null}
+                          src={c.profilePictureUrl ? `${API_BASE_URL}${c.profilePictureUrl}` : null}
                           alt={c.username || 'User'}
                           fallbackType="avatar"
                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
